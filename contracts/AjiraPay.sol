@@ -231,6 +231,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
     IPancakeRouter02 public pancakeswapV2Router;
     address public pancakeswapV2Pair;
+    address public pancakeswapV2RouterAddress;
 
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
@@ -272,6 +273,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
             .createPair(address(this), _pancakeswapV2Router.WETH());
 
         pancakeswapV2Router = _pancakeswapV2Router;
+        pancakeswapV2RouterAddress = _router;
 
         excludedFromFee[msg.sender] = true;
         excludedFromFee[pancakeswapV2Pair] = true;
@@ -290,11 +292,13 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
     function setDevTreasury(address payable _devTreasury) public nonZeroAddress(_devTreasury){
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        if(_devTreasury == devTreasury) return;
         devTreasury = _devTreasury;
         emit NewDevTreasury(_devTreasury, msg.sender, block.timestamp);
     }
 
     function setMarketingTreasury(address payable _marketingTreasury) public nonZeroAddress(_marketingTreasury){
+        if(_marketingTreasury == marketingTreasury) return;
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         marketingTreasury = _marketingTreasury;
         emit NewMarketingTreasury(_marketingTreasury, msg.sender, block.timestamp);
