@@ -227,6 +227,9 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     mapping(address => bool) public excludedFromFee;
     mapping(address => bool) public isBlacklistedAddress;
 
+    mapping(address => bool) public isWhiteListedMerchant;
+    address[] public whiteListedMerchants;
+
     bool isInTaxHolidayPhase = false;
 
     IPancakeRouter02 public pancakeswapV2Router;
@@ -250,6 +253,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         inSwapAndLiquify = false;
     }
 
+
     event NewDevTreasury(address indexed account, address indexed caller, uint indexed timestamp);
     event NewMarketingTreasury(address indexed account, address indexed caller, uint indexed timestamp);
     event TaxHolidayActivated(address indexed caller, uint indexed timestamp);
@@ -262,6 +266,9 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event ERC20TokenRecovered(address indexed token, address indexed beneficiary, uint indexed amount,uint timestamp);
     event NewBlackListAction(address indexed caller, address indexed blackListedAccount, uint timestamp);
     event AccountRemovedFromBlackList(address indexed caller, address indexed blackListedAccount, uint timestamp);
+    event NewMerchantWhiteListed(address indexed caller, address indexed merchantAccount, uint indexed timestamp);
+    event MerchantDelisted(address indexed caller, address indexed merchantAccount, uint timestamp);
+
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -450,6 +457,24 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         isBlacklistedAddress[_account] = false;
         emit AccountRemovedFromBlackList(msg.sender, _account, block.timestamp);
+        return true;
+    }
+
+    function whiteListMerchant(address _merchant) public nonZeroAddress(_merchant) returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        require(isWhiteListedMerchant[_merchant] == false,"Ajira Pay: Merchant is Listed");
+        isWhiteListedMerchant[_merchant] = true;
+        whiteListedMerchants.push(_merchant);
+        emit NewMerchantWhiteListed(msg.sender, _merchant, block.timestamp);
+        return true;
+    }
+
+    function deListMerchant(address _merchant) public nonZeroAddress(_merchant) returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        require(isWhiteListedMerchant[_merchant] == true,"Ajira Pay: Merchant is DeListed");
+        isWhiteListedMerchant[_merchant] == false;
+        //TODO remove this merchant from the whiteListedMerchants array(find an optimal solution for saving gas without looping)
+        emit MerchantDelisted(msg.sender, _merchant, block.timestamp);
         return true;
     }
 
