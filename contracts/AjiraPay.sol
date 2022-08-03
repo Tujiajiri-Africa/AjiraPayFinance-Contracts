@@ -42,7 +42,11 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event NewDevTreasuryFee(address indexed caller, uint indexed newDevTreasuryFee, uint timestamp);
     event NewMarketingTreasuryFee(address indexed caller, uint indexed newMarketingTresuryFee, uint indexed timestamp);
 
-    constructor(address payable _devTreasury, address payable _marketingTreasury){
+    constructor(address _router, address payable _devTreasury, address payable _marketingTreasury){
+        require(_router != address(0),"Ajira Pay: Zero Address detected");
+        require(_devTreasury != address(0),"Ajira Pay: Zero Address detected");
+        require(_marketingTreasury != address(0),"Ajira Pay: Zero Address detected");
+
         _name = 'Ajira Pay';
         _symbol = 'AJP';
         _decimals = 18;
