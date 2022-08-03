@@ -307,6 +307,12 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         emit TaxHolidayActivated(msg.sender, block.timestamp);
     }
 
+    function deActivateTaxHoliday() public{
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        isInTaxHolidayPhase = false;
+        emit TaxHolidayActivated(msg.sender, block.timestamp);
+    }
+
     receive() external payable{}
 
     //recover tokens sent to this address by investor wrongfully, upon request 
