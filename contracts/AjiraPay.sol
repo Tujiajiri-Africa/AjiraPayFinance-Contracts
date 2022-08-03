@@ -22,15 +22,24 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     uint private _decimals;
     uint private _totalSupply;
 
+    address public devTreasury;
+    address public marketingTreasury;
+
+    uint public devFee;
+    uint public marketingFee;
+
     mapping(address => uint) public balances;
     mapping(address => mapping(address => uint)) public allowances;
 
-    constructor(){
+    constructor(address payable _devTreasury, address payable _marketingTreasury){
         _name = 'Ajira Pay';
         _symbol = 'AJP';
         _decimals = 18;
         _totalSupply = 200_000_000 * 10 ** _decimals;
         balances[msg.sender] = _totalSupply;
+
+        devTreasury = _devTreasury;
+        marketingTreasury = _marketingTreasury;
         emit Transfer(address(0), msg.sender, _totalSupply);
     }
 }
