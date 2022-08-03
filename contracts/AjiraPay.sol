@@ -221,8 +221,8 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     uint public devTreasuryFee;
     uint public marketingTreasuryFee;
 
-    mapping(address => uint) public balances;
-    mapping(address => mapping(address => uint)) public allowances;
+    mapping(address => uint) private balances;
+    mapping(address => mapping(address => uint)) private allowances;
 
     bool isInTaxHolidayPhase = false;
 
