@@ -116,7 +116,6 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return allowances[_owner][_spender];
     }
 
-
     function transfer(address _to, uint256 _amount) public virtual override returns (bool) {
         address owner = _msgSender();
         _transfer(owner, _to, _amount);
@@ -159,25 +158,25 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
     //Internal Functions 
     function _transfer(
-        address from,
-        address to,
-        uint256 amount
+        address _from,
+        address _to,
+        uint256 _amount
     ) internal virtual {
-        require(from != address(0), "Ajira Pay: transfer from the zero address");
-        require(to != address(0), "Ajira Pay: transfer to the zero address");
+        require(_from != address(0), "Ajira Pay: transfer from the zero address");
+        require(_to != address(0), "Ajira Pay: transfer to the zero address");
 
-        _beforeTokenTransfer(from, to, amount);
+        _beforeTokenTransfer(_from, _to, _amount);
 
-        uint256 fromBalance = balances[from];
-        require(fromBalance >= amount, "Ajira Pay: transfer amount exceeds balance");
+        uint256 fromBalance = balances[_from];
+        require(fromBalance >= _amount, "Ajira Pay: transfer amount exceeds balance");
         unchecked {
-            balances[from] = fromBalance.sub(amount);
+            balances[_from] = fromBalance.sub(_amount);
         }
-        balances[to] = balances[to].add(amount);
+        balances[_to] = balances[_to].add(_amount);
 
-        emit Transfer(from, to, amount);
+        emit Transfer(_from, _to, _amount);
 
-        _afterTokenTransfer(from, to, amount);
+        _afterTokenTransfer(_from, _to, _amount);
     }
 
     function _approve(
