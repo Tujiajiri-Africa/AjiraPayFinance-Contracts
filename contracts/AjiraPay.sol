@@ -286,7 +286,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     receive() external payable{}
 
     //recover tokens sent to this address by investor wrongfully, upon request 
-    function recoverLostTokensForInvestor(address _token, uint _amount) public{
+    function recoverLostTokensForInvestor(address _token, uint _amount) public nonReentrant{
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         IERC20 token = IERC20(_token);
         token.safeTransfer(msg.sender, _amount);
@@ -357,7 +357,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return true;
     }
 
-    function recoverEth(uint _amount) public returns(bool){
+    function recoverEth(uint _amount) public nonReentrant returns(bool){
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         uint contractBalance = address(this).balance;
         require(_amount >= contractBalance,"Ajira Pay: Insufficient Withdrawal Balance");
