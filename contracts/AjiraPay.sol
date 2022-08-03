@@ -256,6 +256,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event NewRouterAddressSet(address indexed caller, address indexed newAddress, uint indexed timestamp);
     event ExcludeFromFee(address indexed caller, address indexed account, uint timestamp);
     event IncludeInFee(address indexed caller, address indexed account, uint timestamp);
+    event ERC20TokenRecovered(address indexed token, address indexed beneficiary, uint indexed amount,uint timestamp);
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -325,6 +326,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         IERC20 token = IERC20(_token);
         token.safeTransfer(msg.sender, _amount);
+        emit ERC20TokenRecovered(_token, msg.sender, _amount, block.timestamp);
     }
 
     function name() public view returns(string memory){
