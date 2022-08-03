@@ -223,6 +223,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
     mapping(address => uint) private balances;
     mapping(address => mapping(address => uint)) private allowances;
+    mapping(address => bool) public excludedFromFee;
 
     bool isInTaxHolidayPhase = false;
 
@@ -252,6 +253,8 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event NewMarketingTreasuryFee(address indexed caller, uint indexed newMarketingTresuryFee, uint indexed timestamp);
     event EthWithdrawal(address indexed caller, uint indexed amount, uint indexed timestamp);
     event NewRouterAddressSet(address indexed caller, address indexed newAddress, uint indexed timestamp);
+    event EcludeFromFee(address indexed caller, address indexed account, uint timestamp);
+    event IncludeInFee(address indexed caller, address indexed account, uint timestamp);
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -387,13 +390,28 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return true;
     }
 
-    function setNewRouterAddress(address _router) public onlyOwner nonZeroAddress(_router) returns(bool){
+    function setNewRouterAddress(address _router) public nonZeroAddress(_router) returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
             .createPair(address(this), _pancakeswapV2Router.WETH());
 
         pancakeswapV2Router = _pancakeswapV2Router;
         emit NewRouterAddressSet(msg.sender, _router, block.timestamp);
+        return true;
+    }
+
+    function excludeFromFee(address _account) public nonZeroAddress(_account) returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        excludedFromFee[_account] = true;
+        emit EcludeFromFee(msg.sender, _account, block.timestamp);
+        return true;
+    }
+
+    function includeInFee(address _account) public nonZeroAddress(_account) returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        excludedFromFee[_account] = false;
+        emit IncludeInFee(msg.sender, _account, block.timestamp);
         return true;
     }
 
