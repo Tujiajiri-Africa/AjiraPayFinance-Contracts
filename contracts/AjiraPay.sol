@@ -267,6 +267,9 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
         pancakeswapV2Router = _pancakeswapV2Router;
 
+        excludedFromFee[msg.sender] = true;
+        excludedFromFee[pancakeswapV2Pair] = true;
+
         _name = 'Ajira Pay';
         _symbol = 'AJP';
         _decimals = 18;
