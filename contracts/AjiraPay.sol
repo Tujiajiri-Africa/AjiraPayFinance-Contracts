@@ -33,6 +33,8 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     mapping(address => uint) public balances;
     mapping(address => mapping(address => uint)) public allowances;
 
+    bool isInTaxHolidayPhase = false;
+
     modifier nonZeroAddress(address _account){
         require(_account != address(0), "Ajira Pay: Zero Address detected");
         _;
@@ -80,8 +82,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     }
 
     function activateTaxHoliday() public onlyOwner{
-        devTreasuryFee = 0;
-        marketingTreasuryFee = 0;
+        isInTaxHolidayPhase = true;
         emit TaxHolidayActivated(msg.sender, block.timestamp);
     }
 
@@ -117,6 +118,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return allowances[_owner][_spender];
     }
 
+    //TODO add fee and dex logic here
     function transfer(address _to, uint256 _amount) public virtual override returns (bool) {
         address owner = _msgSender();
         _transfer(owner, _to, _amount);
