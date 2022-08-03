@@ -226,6 +226,12 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
     bool isInTaxHolidayPhase = false;
 
+    IPancakeRouter02 public pancakeswapV2Router;
+    address public pancakeswapV2Pair;
+
+    bool inSwapAndLiquify;
+    bool public swapAndLiquifyEnabled = true;
+
     modifier nonZeroAddress(address _account){
         require(_account != address(0), "Ajira Pay: Zero Address detected");
         _;
@@ -242,6 +248,12 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         require(_router != address(0),"Ajira Pay: Zero Address detected");
 
         _setupRole(MANAGER_ROLE, _msgSender());
+        
+        IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
+        pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
+            .createPair(address(this), _pancakeswapV2Router.WETH());
+
+        pancakeswapV2Router = _pancakeswapV2Router;
 
         _name = 'Ajira Pay';
         _symbol = 'AJP';
