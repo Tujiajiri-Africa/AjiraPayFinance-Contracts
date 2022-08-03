@@ -112,7 +112,34 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return _totalSupply;
     }
 
-    function balanceOf(address account) external view override returns (uint){
-        return balances[account];
+    function balanceOf(address _account) external view override returns (uint){
+        return balances[_account];
+    }
+
+    function allowance(address _owner, address _spender) external view returns (uint){
+        return allowances[_owner][_spender];
+    }
+
+    function transfer(address _to, uint256 _amount) external returns (bool){
+
+    }
+
+    function approve(address _spender, uint256 _amount) public virtual override returns (bool) {
+        address _owner = _msgSender();
+        _approve(_owner, _spender, _amount);
+        return true;
+    }
+
+    //Internal Functions 
+    function _approve(
+        address _owner,
+        address _spender,
+        uint256 _amount
+    ) internal virtual {
+        require(_owner != address(0), "Ajira Pay:: approve from the zero address");
+        require(_spender != address(0), "Ajira Pay:: approve to the zero address");
+
+        allowances[_owner][_spender] = _amount;
+        emit Approval(_owner, _spender, _amount);
     }
 }
