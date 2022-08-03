@@ -8,6 +8,7 @@ import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
 import '@openzeppelin/contracts/utils/Counters.sol';
+import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 
 // Import this file to use console.log
 import "hardhat/console.sol";
@@ -16,6 +17,7 @@ import "hardhat/console.sol";
 contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     using SafeMath for uint256;
     using Counters for Counters.Counter;
+    using SafeERC20 for IERC20;
 
     string private _name;
     string private _symbol;
@@ -87,4 +89,30 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     }
 
     receive() external payable{}
+
+    //recover tokens sent to this address by investor wrongfully, upon request 
+    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyOwner{
+        IERC20 token = IERC20(_token);
+        token.safeTransfer(msg.sender, _amount);
+    }
+
+    function name() public view returns(string memory){
+        return _name;
+    }
+
+    function symbol() public view returns(string memory){
+        return _symbol;
+    }
+
+    function decimals() public view returns(uint){
+        return _decimals;
+    }
+
+    function totalSupply() external view override returns(uint){
+        return _totalSupply;
+    }
+
+    function balanceOf(address account) external view override returns (uint){
+        return balances[account];
+    }
 }
