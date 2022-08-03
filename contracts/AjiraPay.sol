@@ -215,15 +215,17 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     uint private _decimals;
     uint private _totalSupply;
 
-    address public devTreasury;
-    address public marketingTreasury;
+    address payable public devTreasury;
+    address payable public marketingTreasury;
 
     uint public devTreasuryFeePercent = 1;
     uint public marketingTreasuryFeePercent = 1;
 
     mapping(address => uint) private balances;
     mapping(address => mapping(address => uint)) private allowances;
+
     mapping(address => bool) public excludedFromFee;
+    mapping(address => bool) public isBlacklistedAddress;
 
     bool isInTaxHolidayPhase = false;
 
@@ -257,6 +259,8 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event ExcludeFromFee(address indexed caller, address indexed account, uint timestamp);
     event IncludeInFee(address indexed caller, address indexed account, uint timestamp);
     event ERC20TokenRecovered(address indexed token, address indexed beneficiary, uint indexed amount,uint timestamp);
+    event NewBlackListAction(address indexed caller, address indexed blackListedAccount, uint timestamp);
+    event AccountRemovedFromBlackList(address indexed caller, address indexed blackListedAccount, uint timestamp);
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -272,6 +276,9 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         excludedFromFee[msg.sender] = true;
         excludedFromFee[pancakeswapV2Pair] = true;
         excludedFromFee[_router] = true;
+        excludedFromFee[address(this)] = true;
+        excludedFromFee[devTreasury] = true;
+        excludedFromFee[marketingTreasury] = true;
 
         _name = 'Ajira Pay';
         _symbol = 'AJP';
@@ -425,6 +432,20 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         excludedFromFee[_account] = false;
         emit IncludeInFee(msg.sender, _account, block.timestamp);
+        return true;
+    }
+
+    function addToBlackList(address _account) public nonZeroAddress(_account) returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        isBlacklistedAddress[_account] = true;
+        emit NewBlackListAction(msg.sender, _account, block.timestamp);
+        return true;
+    }
+
+    function removeFromBlackList(address _account) public nonZeroAddress(_account) returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        isBlacklistedAddress[_account] = false;
+        emit AccountRemovedFromBlackList(msg.sender, _account, block.timestamp);
         return true;
     }
 
