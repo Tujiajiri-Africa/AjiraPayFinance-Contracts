@@ -251,6 +251,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event NewDevTreasuryFee(address indexed caller, uint indexed newDevTreasuryFee, uint timestamp);
     event NewMarketingTreasuryFee(address indexed caller, uint indexed newMarketingTresuryFee, uint indexed timestamp);
     event EthWithdrawal(address indexed caller, uint indexed amount, uint indexed timestamp);
+    event NewRouterAddressSet(address indexed caller, address indexed newAddress, uint indexed timestamp);
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -383,6 +384,16 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         require(_amount >= contractBalance,"Ajira Pay: Insufficient Withdrawal Balance");
         payable(msg.sender).transfer(_amount);
         emit EthWithdrawal(msg.sender, _amount, block.timestamp);
+        return true;
+    }
+
+    function setNewRouterAddress(address _router) public onlyOwner nonZeroAddress(_router) returns(bool){
+        IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
+        pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
+            .createPair(address(this), _pancakeswapV2Router.WETH());
+
+        pancakeswapV2Router = _pancakeswapV2Router;
+        emit NewRouterAddressSet(msg.sender, _router, block.timestamp);
         return true;
     }
 
