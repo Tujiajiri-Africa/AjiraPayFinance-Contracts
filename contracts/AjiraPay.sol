@@ -43,6 +43,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event TaxHolidayActivated(address indexed caller, uint indexed timestamp);
     event NewDevTreasuryFee(address indexed caller, uint indexed newDevTreasuryFee, uint timestamp);
     event NewMarketingTreasuryFee(address indexed caller, uint indexed newMarketingTresuryFee, uint indexed timestamp);
+    event EthWithdrawal(address indexed caller, uint indexed amount, uint indexed timestamp);
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -154,6 +155,13 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         }
 
         return true;
+    }
+
+    function recoverEth(uint _amount) public onlyOwner{
+        uint contractBalance = address(this).balance;
+        require(_amount >= contractBalance,"Ajira Pay: Insufficient Withdrawal Balance");
+        payable(msg.sender).transfer(_amount);
+        emit EthWithdrawal(msg.sender, _amount, block.timestamp);
     }
 
     //Internal Functions 
