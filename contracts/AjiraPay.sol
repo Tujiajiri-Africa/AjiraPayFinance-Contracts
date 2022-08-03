@@ -25,11 +25,22 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     address public devTreasury;
     address public marketingTreasury;
 
-    uint public devFee;
-    uint public marketingFee;
+    uint public devTreasuryFee;
+    uint public marketingTreasuryFee;
 
     mapping(address => uint) public balances;
     mapping(address => mapping(address => uint)) public allowances;
+
+    modifier nonZeroAddress(address _account){
+        require(_account != address(0), "Ajira Pay: Zero Address detected");
+        _;
+    }
+
+    event NewDevTreasury(address indexed account, address indexed caller, uint indexed timestamp);
+    event NewMarketingTreasury(address indexed account, address indexed caller, uint indexed timestamp);
+    event TaxHolidayActivated(address indexed caller, uint indexed timestamp);
+    event NewDevTreasuryFee(address indexed caller, uint indexed newDevTreasuryFee, uint timestamp);
+    event NewMarketingTreasuryFee(address indexed caller, uint indexed newMarketingTresuryFee, uint indexed timestamp);
 
     constructor(address payable _devTreasury, address payable _marketingTreasury){
         _name = 'Ajira Pay';
@@ -42,4 +53,34 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         marketingTreasury = _marketingTreasury;
         emit Transfer(address(0), msg.sender, _totalSupply);
     }
+
+    function setDevTreasury(address payable _devTreasury) public nonZeroAddress(_devTreasury) onlyOwner{
+        devTreasury = _devTreasury;
+        emit NewDevTreasury(_devTreasury, msg.sender, block.timestamp);
+    }
+
+    function setMarketingTreasury(address payable _marketingTreasury) public nonZeroAddress(_marketingTreasury) onlyOwner{
+        marketingTreasury = _marketingTreasury;
+        emit NewMarketingTreasury(_marketingTreasury, msg.sender, block.timestamp);
+    }
+
+    function setDevFee(uint _fee) public onlyOwner{
+        require(_fee > 0, "Ajira Pay: Dev Treasury Fee Cannot be zero or less");
+        devTreasuryFee = _fee;
+        emit NewDevTreasuryFee(msg.sender, _fee, block.timestamp);
+    }
+
+    function setMarketingFee(uint _fee) public onlyOwner{
+        require(_fee > 0, "Ajira Pay: Marketing Treasury Fee Cannot be zero or less");
+        marketingTreasuryFee= _fee;
+        emit NewMarketingTreasuryFee(msg.sender, _fee, block.timestamp);
+    }
+
+    function activateTaxHoliday() public onlyOwner{
+        devTreasuryFee = 0;
+        marketingTreasuryFee = 0;
+        emit TaxHolidayActivated(msg.sender, block.timestamp);
+    }
+
+    receive() external payable{}
 }
