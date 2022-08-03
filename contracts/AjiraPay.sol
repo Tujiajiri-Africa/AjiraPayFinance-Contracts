@@ -208,7 +208,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     using Counters for Counters.Counter;
     using SafeERC20 for IERC20;
 
-    bytes public constant MANAGER = bytes("MANAGER");
+    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
     string private _name;
     string private _symbol;
@@ -241,38 +241,44 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
 
+        _setupRole(MANAGER_ROLE, _msgSender());
+
         _name = 'Ajira Pay';
         _symbol = 'AJP';
         _decimals = 18;
         _totalSupply = 200_000_000 * 10 ** _decimals;
         balances[msg.sender] = _totalSupply;
-
         emit Transfer(address(0), msg.sender, _totalSupply);
     }
 
-    function setDevTreasury(address payable _devTreasury) public nonZeroAddress(_devTreasury) onlyOwner{
+    function setDevTreasury(address payable _devTreasury) public nonZeroAddress(_devTreasury){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         devTreasury = _devTreasury;
         emit NewDevTreasury(_devTreasury, msg.sender, block.timestamp);
     }
 
-    function setMarketingTreasury(address payable _marketingTreasury) public nonZeroAddress(_marketingTreasury) onlyOwner{
+    function setMarketingTreasury(address payable _marketingTreasury) public nonZeroAddress(_marketingTreasury){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         marketingTreasury = _marketingTreasury;
         emit NewMarketingTreasury(_marketingTreasury, msg.sender, block.timestamp);
     }
 
-    function setDevFee(uint _fee) public onlyOwner{
+    function setDevFee(uint _fee) public{
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         require(_fee > 0, "Ajira Pay: Dev Treasury Fee Cannot be zero or less");
         devTreasuryFee = _fee;
         emit NewDevTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
-    function setMarketingFee(uint _fee) public onlyOwner{
+    function setMarketingFee(uint _fee) public{
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         require(_fee > 0, "Ajira Pay: Marketing Treasury Fee Cannot be zero or less");
         marketingTreasuryFee= _fee;
         emit NewMarketingTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
-    function activateTaxHoliday() public onlyOwner{
+    function activateTaxHoliday() public{
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         isInTaxHolidayPhase = true;
         emit TaxHolidayActivated(msg.sender, block.timestamp);
     }
@@ -280,7 +286,8 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     receive() external payable{}
 
     //recover tokens sent to this address by investor wrongfully, upon request 
-    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyOwner{
+    function recoverLostTokensForInvestor(address _token, uint _amount) public{
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         IERC20 token = IERC20(_token);
         token.safeTransfer(msg.sender, _amount);
     }
@@ -350,11 +357,13 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return true;
     }
 
-    function recoverEth(uint _amount) public onlyOwner{
+    function recoverEth(uint _amount) public returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         uint contractBalance = address(this).balance;
         require(_amount >= contractBalance,"Ajira Pay: Insufficient Withdrawal Balance");
         payable(msg.sender).transfer(_amount);
         emit EthWithdrawal(msg.sender, _amount, block.timestamp);
+        return true;
     }
 
     //Internal Functions 
