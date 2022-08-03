@@ -268,7 +268,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event AccountRemovedFromBlackList(address indexed caller, address indexed blackListedAccount, uint timestamp);
     event NewMerchantWhiteListed(address indexed caller, address indexed merchantAccount, uint indexed timestamp);
     event MerchantDelisted(address indexed caller, address indexed merchantAccount, uint timestamp);
-
+    event MinLiquidityAmountUpdated(address indexed caller, uint newAmount, uint indexed timestamp);
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -284,7 +284,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
         excludedFromFee[msg.sender] = true;
         excludedFromFee[pancakeswapV2Pair] = true;
-        excludedFromFee[_router] = true;
+        excludedFromFee[pancakeswapV2RouterAddress] = true;
         excludedFromFee[address(this)] = true;
         excludedFromFee[devTreasury] = true;
         excludedFromFee[marketingTreasury] = true;
@@ -429,6 +429,14 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
         pancakeswapV2Router = _pancakeswapV2Router;
         emit NewRouterAddressSet(msg.sender, _router, block.timestamp);
+        return true;
+    }
+
+    function setMinTokensToAddLiquidityBeforeSwap(uint _amount) public returns(bool){
+        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+        require(_amount != 0,"Ajira Pay: Zero Amount for liquidity not allowed");
+        minimumTokensBeforeSwap = _amount;
+        emit MinLiquidityAmountUpdated(msg.sender, _amount, block.timestamp);
         return true;
     }
 
