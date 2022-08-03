@@ -232,9 +232,17 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
 
+    uint256 public minimumTokensBeforeSwap = 2 * 10**6 * 10**_decimals;
+
     modifier nonZeroAddress(address _account){
         require(_account != address(0), "Ajira Pay: Zero Address detected");
         _;
+    }
+
+    modifier lockTheSwap {
+        inSwapAndLiquify = true;
+        _;
+        inSwapAndLiquify = false;
     }
 
     event NewDevTreasury(address indexed account, address indexed caller, uint indexed timestamp);
@@ -248,7 +256,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         require(_router != address(0),"Ajira Pay: Zero Address detected");
 
         _setupRole(MANAGER_ROLE, _msgSender());
-        
+
         IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
             .createPair(address(this), _pancakeswapV2Router.WETH());
