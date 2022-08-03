@@ -218,8 +218,8 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     address public devTreasury;
     address public marketingTreasury;
 
-    uint public devTreasuryFee;
-    uint public marketingTreasuryFee;
+    uint public devTreasuryFeePercent = 1;
+    uint public marketingTreasuryFeePercent = 1;
 
     mapping(address => uint) private balances;
     mapping(address => mapping(address => uint)) private allowances;
@@ -234,6 +234,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     bool public swapAndLiquifyEnabled = true;
 
     uint256 public minimumTokensBeforeSwap = 2 * 10**6 * 10**_decimals;
+    uint public constant MAX_FEE_FACTOR = 100;
 
     modifier nonZeroAddress(address _account){
         require(_account != address(0), "Ajira Pay: Zero Address detected");
@@ -253,7 +254,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     event NewMarketingTreasuryFee(address indexed caller, uint indexed newMarketingTresuryFee, uint indexed timestamp);
     event EthWithdrawal(address indexed caller, uint indexed amount, uint indexed timestamp);
     event NewRouterAddressSet(address indexed caller, address indexed newAddress, uint indexed timestamp);
-    event EcludeFromFee(address indexed caller, address indexed account, uint timestamp);
+    event ExcludeFromFee(address indexed caller, address indexed account, uint timestamp);
     event IncludeInFee(address indexed caller, address indexed account, uint timestamp);
 
     constructor(address _router){
@@ -269,6 +270,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
 
         excludedFromFee[msg.sender] = true;
         excludedFromFee[pancakeswapV2Pair] = true;
+        excludedFromFee[_router] = true;
 
         _name = 'Ajira Pay';
         _symbol = 'AJP';
@@ -293,14 +295,14 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     function setDevFee(uint _fee) public{
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         require(_fee > 0, "Ajira Pay: Dev Treasury Fee Cannot be zero or less");
-        devTreasuryFee = _fee;
+        devTreasuryFeePercent = _fee;
         emit NewDevTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
     function setMarketingFee(uint _fee) public{
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         require(_fee > 0, "Ajira Pay: Marketing Treasury Fee Cannot be zero or less");
-        marketingTreasuryFee= _fee;
+        marketingTreasuryFeePercent = _fee;
         emit NewMarketingTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
@@ -413,7 +415,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     function excludeFromFee(address _account) public nonZeroAddress(_account) returns(bool){
         require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         excludedFromFee[_account] = true;
-        emit EcludeFromFee(msg.sender, _account, block.timestamp);
+        emit ExcludeFromFee(msg.sender, _account, block.timestamp);
         return true;
     }
 
@@ -502,6 +504,13 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         }
     }
 
+    function _calculateDevTreasuryFee(uint _amount) private view returns(uint){
+        return _amount.mul(devTreasuryFeePercent).div(MAX_FEE_FACTOR);
+    }
+
+    function _calculateMarketingTreasuryFee(uint _amount) private view returns(uint){
+        return _amount.mul(marketingTreasuryFeePercent).div(MAX_FEE_FACTOR);
+    }
 
     /**
      * @dev Hook that is called before any transfer of tokens. This includes
