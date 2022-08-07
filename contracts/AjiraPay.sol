@@ -253,6 +253,10 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         inSwapAndLiquify = false;
     }
 
+    modifier onlyManager(address _account){
+        require(hasRole(MANAGER_ROLE, _account),"Ajira Pay: An unauthorized account");
+        _;
+    }
 
     event NewDevTreasury(address indexed account, address indexed caller, uint indexed timestamp);
     event NewMarketingTreasury(address indexed account, address indexed caller, uint indexed timestamp);
@@ -297,42 +301,42 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         emit Transfer(address(0), msg.sender, _totalSupply);
     }
 
-    function setDevTreasury(address payable _devTreasury) public nonZeroAddress(_devTreasury){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function setDevTreasury(address payable _devTreasury) public 
+    nonZeroAddress(_devTreasury) 
+    onlyManager(msg.sender)
+    {
         if(_devTreasury == devTreasury) return;
         devTreasury = _devTreasury;
         emit NewDevTreasury(_devTreasury, msg.sender, block.timestamp);
     }
 
-    function setMarketingTreasury(address payable _marketingTreasury) public nonZeroAddress(_marketingTreasury){
+    function setMarketingTreasury(address payable _marketingTreasury) public 
+    nonZeroAddress(_marketingTreasury)
+    onlyManager(msg.sender)
+    {
         if(_marketingTreasury == marketingTreasury) return;
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
         marketingTreasury = _marketingTreasury;
         emit NewMarketingTreasury(_marketingTreasury, msg.sender, block.timestamp);
     }
 
-    function setDevFee(uint _fee) public{
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function setDevFee(uint _fee) public onlyManager(msg.sender){
         require(_fee > 0, "Ajira Pay: Dev Treasury Fee Cannot be zero or less");
         devTreasuryFeePercent = _fee;
         emit NewDevTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
-    function setMarketingFee(uint _fee) public{
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function setMarketingFee(uint _fee) public onlyManager(msg.sender){
         require(_fee > 0, "Ajira Pay: Marketing Treasury Fee Cannot be zero or less");
         marketingTreasuryFeePercent = _fee;
         emit NewMarketingTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
-    function activateTaxHoliday() public{
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function activateTaxHoliday() public onlyManager(msg.sender){
         isInTaxHolidayPhase = true;
         emit TaxHolidayActivated(msg.sender, block.timestamp);
     }
 
-    function deActivateTaxHoliday() public{
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function deActivateTaxHoliday() public onlyManager(msg.sender){
         isInTaxHolidayPhase = false;
         emit TaxHolidayActivated(msg.sender, block.timestamp);
     }
@@ -340,8 +344,9 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
     receive() external payable{}
 
     //recover tokens sent to this address by investor wrongfully, upon request 
-    function recoverLostTokensForInvestor(address _token, uint _amount) public nonReentrant{
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function recoverLostTokensForInvestor(address _token, uint _amount) public nonReentrant
+    onlyManager(msg.sender)
+    {
         IERC20 token = IERC20(_token);
         token.safeTransfer(msg.sender, _amount);
         emit ERC20TokenRecovered(_token, msg.sender, _amount, block.timestamp);
@@ -412,8 +417,7 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return true;
     }
 
-    function recoverEth(uint _amount) public nonReentrant returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function recoverEth(uint _amount) public nonReentrant onlyManager(msg.sender) returns(bool){
         uint contractBalance = address(this).balance;
         require(_amount >= contractBalance,"Ajira Pay: Insufficient Withdrawal Balance");
         payable(msg.sender).transfer(_amount);
@@ -421,8 +425,11 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return true;
     }
 
-    function setNewRouterAddress(address _router) public nonZeroAddress(_router) returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function setNewRouterAddress(address _router) public 
+    nonZeroAddress(_router) 
+    onlyManager(msg.sender)
+    returns(bool)
+    {
         IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
             .createPair(address(this), _pancakeswapV2Router.WETH());
@@ -432,44 +439,56 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return true;
     }
 
-    function setMinTokensToAddLiquidityBeforeSwap(uint _amount) public returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function setMinTokensToAddLiquidityBeforeSwap(uint _amount) onlyManager(msg.sender) public returns(bool){
         require(_amount != 0,"Ajira Pay: Zero Amount for liquidity not allowed");
         minimumTokensBeforeSwap = _amount;
         emit MinLiquidityAmountUpdated(msg.sender, _amount, block.timestamp);
         return true;
     }
 
-    function excludeFromFee(address _account) public nonZeroAddress(_account) returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function excludeFromFee(address _account) public 
+    nonZeroAddress(_account) 
+    onlyManager(msg.sender)
+    returns(bool)
+    {
         excludedFromFee[_account] = true;
         emit ExcludeFromFee(msg.sender, _account, block.timestamp);
         return true;
     }
 
-    function includeInFee(address _account) public nonZeroAddress(_account) returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function includeInFee(address _account) public 
+    nonZeroAddress(_account) 
+    onlyManager(msg.sender)
+    returns(bool){
         excludedFromFee[_account] = false;
         emit IncludeInFee(msg.sender, _account, block.timestamp);
         return true;
     }
 
-    function addToBlackList(address _account) public nonZeroAddress(_account) returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function addToBlackList(address _account) public 
+    nonZeroAddress(_account)
+    onlyManager(msg.sender) 
+    returns(bool)
+    {
         isBlacklistedAddress[_account] = true;
         emit NewBlackListAction(msg.sender, _account, block.timestamp);
         return true;
     }
 
-    function removeFromBlackList(address _account) public nonZeroAddress(_account) returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function removeFromBlackList(address _account) public 
+    nonZeroAddress(_account) 
+    onlyManager(msg.sender)
+    returns(bool){
         isBlacklistedAddress[_account] = false;
         emit AccountRemovedFromBlackList(msg.sender, _account, block.timestamp);
         return true;
     }
 
-    function whiteListMerchant(address _merchant) public nonZeroAddress(_merchant) returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function whiteListMerchant(address _merchant) public 
+    nonZeroAddress(_merchant) 
+    onlyManager(msg.sender)
+    returns(bool)
+    {
         require(isWhiteListedMerchant[_merchant] == false,"Ajira Pay: Merchant is Listed");
         isWhiteListedMerchant[_merchant] = true;
         whiteListedMerchants.push(_merchant);
@@ -477,8 +496,11 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return true;
     }
 
-    function deListMerchant(address _merchant) public nonZeroAddress(_merchant) returns(bool){
-        require(hasRole(MANAGER_ROLE, msg.sender),"Ajira Pay: An unathorized account");
+    function deListMerchant(address _merchant) public 
+    nonZeroAddress(_merchant) 
+    onlyManager(msg.sender)
+    returns(bool)
+    {
         require(isWhiteListedMerchant[_merchant] == true,"Ajira Pay: Merchant is DeListed");
         isWhiteListedMerchant[_merchant] == false;
         //TODO remove this merchant from the whiteListedMerchants array(find an optimal solution for saving gas without looping)
