@@ -536,23 +536,27 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         return true;
     }
 
-    function transferAndCall(address to, uint256 amount) external returns (bool){
-
+    function transferAndCall(address to, uint256 amount) public override returns (bool){
+        transferAndCall(to, amount, "");
+        return true;
     }
+
     function transferAndCall(
         address to,
         uint256 amount,
         bytes calldata data
-    ) external returns (bool){
-
+    ) public override returns (bool){
+        transfer(to, amount);
+        require(_checkAndCallTransfer(_msgSender(), to, amount, data), "ERC1363: _checkAndCallTransfer reverts");
+        return true;
     }
 
     function transferFromAndCall(
         address from,
         address to,
         uint256 amount
-    ) external returns (bool){
-
+    ) public override returns (bool){
+        return transferFromAndCall(from, to, amount, "");
     }
 
     function transferFromAndCall(
@@ -560,19 +564,24 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         address to,
         uint256 amount,
         bytes calldata data
-    ) external returns (bool){
-
+    ) public override returns (bool){
+        transferFrom(from, to, amount);
+        require(_checkAndCallTransfer(from, to, amount, data), "ERC1363: _checkAndCallTransfer reverts");
+        return true;
     }
-    function approveAndCall(address spender, uint256 amount) external returns (bool){
-
+    
+    function approveAndCall(address spender, uint256 amount) public override returns (bool){
+        return approveAndCall(spender, amount, "");
     }
 
     function approveAndCall(
         address spender,
         uint256 amount,
         bytes calldata data
-    ) external returns (bool){
-
+    ) public override returns (bool){
+        approve(spender, amount);
+        require(_checkAndCallApprove(spender, amount, data), "ERC1363: _checkAndCallApprove reverts");
+        return true;
     }
     function onTransferReceived(
         address spender,
@@ -591,6 +600,31 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
     }
     //Internal Functions 
+    function _checkAndCallTransfer(
+        address sender,
+        address recipient,
+        uint256 amount,
+        bytes memory data
+    ) internal virtual returns (bool) {
+        if (!recipient.isContract()) {
+            return false;
+        }
+        bytes4 retval = IERC1363Receiver(recipient).onTransferReceived(_msgSender(), sender, amount, data);
+        return (retval == IERC1363Receiver(recipient).onTransferReceived.selector);
+    }
+
+    function _checkAndCallApprove(
+        address spender,
+        uint256 amount,
+        bytes memory data
+    ) internal virtual returns (bool) {
+        if (!spender.isContract()) {
+            return false;
+        }
+        bytes4 retval = IERC1363Spender(spender).onApprovalReceived(_msgSender(), amount, data);
+        return (retval == IERC1363Spender(spender).onApprovalReceived.selector);
+    }
+
     function _transfer(
         address _from,
         address _to,
