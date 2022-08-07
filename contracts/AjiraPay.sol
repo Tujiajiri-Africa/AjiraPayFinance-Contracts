@@ -4,11 +4,14 @@ import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/access/AccessControl.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
-import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
+//import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
+import 'erc-payable-token/contracts/token/ERC1363/IERC1363.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
 import '@openzeppelin/contracts/utils/Counters.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import '@openzeppelin/contracts/utils/introspection/IERC165.sol';
+import '@openzeppelin/contracts/utils/introspection/ERC165.sol';
 
 // Import this file to use console.log
 import "hardhat/console.sol";
@@ -203,7 +206,24 @@ interface IPancakeRouter02 is IPancakeRouter01 {
     ) external;
 }
 
-contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
+interface IERC1363Spender {
+    function onApprovalReceived(
+        address sender,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bytes4);
+}
+
+interface IERC1363Receiver {
+    function onTransferReceived(
+        address spender,
+        address sender,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bytes4);
+}
+
+contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver, ERC165,AccessControl, IERC1363{
     using SafeMath for uint256;
     using Counters for Counters.Counter;
     using SafeERC20 for IERC20;
@@ -299,6 +319,14 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         _totalSupply = 200_000_000 * 10 ** _decimals;
         balances[msg.sender] = _totalSupply;
         emit Transfer(address(0), msg.sender, _totalSupply);
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl,ERC165, IERC165) returns (bool) {
+        return 
+            interfaceId == type(IERC1363Spender).interfaceId ||
+            interfaceId == type(IERC1363Receiver).interfaceId ||
+            interfaceId == type(IERC1363).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 
     function setDevTreasury(address payable _devTreasury) public 
@@ -508,6 +536,60 @@ contract AjiraPay is Ownable,AccessControl,ReentrancyGuard, IERC20{
         return true;
     }
 
+    function transferAndCall(address to, uint256 amount) external returns (bool){
+
+    }
+    function transferAndCall(
+        address to,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bool){
+
+    }
+
+    function transferFromAndCall(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool){
+
+    }
+
+    function transferFromAndCall(
+        address from,
+        address to,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bool){
+
+    }
+    function approveAndCall(address spender, uint256 amount) external returns (bool){
+
+    }
+
+    function approveAndCall(
+        address spender,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bool){
+
+    }
+    function onTransferReceived(
+        address spender,
+        address sender,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bytes4){
+
+    }
+
+    function onApprovalReceived(
+        address sender,
+        uint256 amount,
+        bytes calldata data
+    ) external returns (bytes4){
+
+    }
     //Internal Functions 
     function _transfer(
         address _from,
