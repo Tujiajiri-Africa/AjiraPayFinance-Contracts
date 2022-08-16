@@ -559,7 +559,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
     function transferAndCall(address to, uint256 amount) public override returns (bool){
         //transferAndCall(to, amount, "");
-        return true;
+        //return true;
     }
 
     function transferAndCall(
@@ -763,11 +763,10 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         _sendFeeToTreasury(devTreasury, devTreasuryFundsFromFee);
         _sendFeeToTreasury(marketingTreasury, marketingTreasuryFundsFromFee);
 
-        uint remainingTokenBalanceAfterFeeDeductions = balanceOf(address(this));
         uint remainingBnbBalanceAfterFeeDeductions = address(this).balance.sub(devTreasuryFundsFromFee).sub(marketingTreasuryFundsFromFee);
 
         // add liquidity to pancakeswap
-        _addLiquidity(remainingTokenBalanceAfterFeeDeductions, remainingBnbBalanceAfterFeeDeductions);
+        _addLiquidity(otherHalf, remainingBnbBalanceAfterFeeDeductions);
 
         emit SwapAndLiquidify(half, remainingBnbBalanceAfterFeeDeductions, otherHalf);
     }
