@@ -266,6 +266,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     uint256 public maxTxAmount;
 
     uint public constant MAX_FEE_FACTOR = 5000;
+    uint public liquidityPoolFactor;
 
     modifier nonZeroAddress(address _account){
         require(_account != address(0), "Ajira Pay: Zero Address detected");
@@ -299,6 +300,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     event MerchantDelisted(address indexed caller, address indexed merchantAccount, uint timestamp);
     event MinLiquidityAmountUpdated(address indexed caller, uint newAmount, uint indexed timestamp);
     event SwapAndLiquidify(uint256 tokensSwapped, uint256 bnbReceived, uint256 tokensIntoLiqudity);
+    event NewLiquidityFeeFactor(address caller, uint newFeeFactor, uint timestamp);
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -322,7 +324,8 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         _decimals = 18;
         _totalSupply = 200_000_000 * (10 ** _decimals);
         
-        minimumTokensBeforeSwap = _totalSupply / MAX_FEE_FACTOR;
+        liquidityPoolFactor = 100000;
+        minimumTokensBeforeSwap = _totalSupply.div(liquidityPoolFactor);
         //maxTxAmount = 5000_000 * 10** _decimals;
         
         balances[msg.sender] = _totalSupply;
@@ -359,6 +362,13 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         require(_fee > 0, "Ajira Pay: Dev Treasury Fee Cannot be zero or less");
         devTreasuryFeePercent = _fee;
         emit NewDevTreasuryFee(msg.sender, _fee, block.timestamp);
+    }
+
+    function setLiquidityPoolFeeFactor(uint _newFeeFactor) public onlyManager(msg.sender){
+        require(_newFeeFactor > 0,"Ajira Pay: Liquidity Pool Cannot be less than zero");
+        liquidityPoolFactor = _newFeeFactor;
+        minimumTokensBeforeSwap = minimumTokensBeforeSwap.div(_newFeeFactor);
+        emit NewLiquidityFeeFactor(msg.sender, _newFeeFactor, block.timestamp);
     }
 
     function setMarketingFee(uint _fee) public onlyManager(msg.sender){
