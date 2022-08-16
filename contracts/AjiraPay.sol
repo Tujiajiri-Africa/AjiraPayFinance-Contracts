@@ -12,6 +12,7 @@ import '@openzeppelin/contracts/utils/Counters.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/utils/introspection/IERC165.sol';
 import '@openzeppelin/contracts/utils/introspection/ERC165.sol';
+import '@openzeppelin/contracts/utils/Address.sol';
 
 // Import this file to use console.log
 import "hardhat/console.sol";
@@ -227,6 +228,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     using SafeMath for uint256;
     using Counters for Counters.Counter;
     using SafeERC20 for IERC20;
+    using Address for address;
 
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
@@ -254,13 +256,16 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
     IPancakeRouter02 public pancakeswapV2Router;
     address public pancakeswapV2Pair;
-    address public pancakeswapV2RouterAddress;
+
+    address private DEAD = 0x000000000000000000000000000000000000dEaD;
 
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
 
-    uint256 public minimumTokensBeforeSwap = 2 * 10**6 * 10**_decimals;
-    uint public constant MAX_FEE_FACTOR = 100;
+    uint256 public minimumTokensBeforeSwap;
+    uint256 public maxTxAmount;
+
+    uint public constant MAX_FEE_FACTOR = 5000;
 
     modifier nonZeroAddress(address _account){
         require(_account != address(0), "Ajira Pay: Zero Address detected");
@@ -293,6 +298,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     event NewMerchantWhiteListed(address indexed caller, address indexed merchantAccount, uint indexed timestamp);
     event MerchantDelisted(address indexed caller, address indexed merchantAccount, uint timestamp);
     event MinLiquidityAmountUpdated(address indexed caller, uint newAmount, uint indexed timestamp);
+    event SwapAndLiquidify(uint256 tokensSwapped, uint256 bnbReceived, uint256 tokensIntoLiqudity);
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
@@ -304,11 +310,9 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
             .createPair(address(this), _pancakeswapV2Router.WETH());
 
         pancakeswapV2Router = _pancakeswapV2Router;
-        pancakeswapV2RouterAddress = _router;
 
         excludedFromFee[msg.sender] = true;
         excludedFromFee[pancakeswapV2Pair] = true;
-        excludedFromFee[pancakeswapV2RouterAddress] = true;
         excludedFromFee[address(this)] = true;
         excludedFromFee[devTreasury] = true;
         excludedFromFee[marketingTreasury] = true;
@@ -316,7 +320,11 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         _name = 'Ajira Pay';
         _symbol = 'AJP';
         _decimals = 18;
-        _totalSupply = 200_000_000 * 10 ** _decimals;
+        _totalSupply = 200_000_000 * (10 ** _decimals);
+        
+        minimumTokensBeforeSwap = _totalSupply / MAX_FEE_FACTOR;
+        //maxTxAmount = 5000_000 * 10** _decimals;
+        
         balances[msg.sender] = _totalSupply;
         emit Transfer(address(0), msg.sender, _totalSupply);
     }
@@ -378,6 +386,11 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         IERC20 token = IERC20(_token);
         token.safeTransfer(msg.sender, _amount);
         emit ERC20TokenRecovered(_token, msg.sender, _amount, block.timestamp);
+        require(_token != address(this), "Owner cannot claim native tokens");
+        if (_token == address(0x0)) {
+            payable(msg.sender).transfer(address(this).balance);
+            return;
+        }
     }
 
     function name() public view returns(string memory){
@@ -404,10 +417,9 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         return allowances[_owner][_spender];
     }
 
-    //TODO add fee and dex logic here
+    //TODO add fee and dex logic here(_transfer)
     function transfer(address _to, uint256 _amount) public virtual override returns (bool) {
-        address owner = _msgSender();
-        _transfer(owner, _to, _amount);
+        _transfer(msg.sender, _to, _amount);
         return true;
     }
 
@@ -530,14 +542,13 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     returns(bool)
     {
         require(isWhiteListedMerchant[_merchant] == true,"Ajira Pay: Merchant is DeListed");
-        isWhiteListedMerchant[_merchant] == false;
-        //TODO remove this merchant from the whiteListedMerchants array(find an optimal solution for saving gas without looping)
+        isWhiteListedMerchant[_merchant] = false;
         emit MerchantDelisted(msg.sender, _merchant, block.timestamp);
         return true;
     }
 
     function transferAndCall(address to, uint256 amount) public override returns (bool){
-        transferAndCall(to, amount, "");
+        //transferAndCall(to, amount, "");
         return true;
     }
 
@@ -556,7 +567,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         address to,
         uint256 amount
     ) public override returns (bool){
-        return transferFromAndCall(from, to, amount, "");
+        //return transferFromAndCall(from, to, amount, "");
     }
 
     function transferFromAndCall(
@@ -571,7 +582,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     }
     
     function approveAndCall(address spender, uint256 amount) public override returns (bool){
-        return approveAndCall(spender, amount, "");
+        //return approveAndCall(spender, amount, "");
     }
 
     function approveAndCall(
@@ -635,6 +646,21 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
         _beforeTokenTransfer(_from, _to, _amount);
 
+        uint256 contractTokenBalance = balanceOf(address(this));
+
+        bool overMinTokenBalance = contractTokenBalance >= minimumTokensBeforeSwap;
+
+        if (overMinTokenBalance && !inSwapAndLiquify && _from != pancakeswapV2Pair && swapAndLiquifyEnabled) {
+            contractTokenBalance = minimumTokensBeforeSwap;
+            _swapAndLiquidify(contractTokenBalance);
+        }
+
+        bool takeFee = true;
+
+        if(excludedFromFee[_from] || excludedFromFee[_to]){
+            takeFee = false;
+        }
+        /*
         uint256 fromBalance = balances[_from];
         require(fromBalance >= _amount, "Ajira Pay: transfer amount exceeds balance");
         unchecked {
@@ -643,7 +669,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         balances[_to] = balances[_to].add(_amount);
 
         emit Transfer(_from, _to, _amount);
-
+        **/
         _afterTokenTransfer(_from, _to, _amount);
     }
 
@@ -708,6 +734,56 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
     function _calculateMarketingTreasuryFee(uint _amount) private view returns(uint){
         return _amount.mul(marketingTreasuryFeePercent).div(MAX_FEE_FACTOR);
+    }
+
+    function _swapAndLiquidify(uint256 _contractTokenBalance) private {
+        uint256 half = _contractTokenBalance.div(2);
+        uint256 otherHalf = _contractTokenBalance.sub(half);
+
+        uint256 initialBalance = address(this).balance;
+
+        // swap tokens for ETH
+        _swapTokensForEth(half);
+        
+        uint256 newBalance = address(this).balance.sub(initialBalance);
+
+        // add liquidity to uniswap
+        _addLiquidity(otherHalf, newBalance);
+
+        emit SwapAndLiquidify(half, newBalance, otherHalf);
+    }
+
+    function _swapTokensForEth(uint256 _numTokensToSell) private {
+        // generate the uniswap pair path of token -> weth
+        address[] memory path = new address[](2);
+        path[0] = address(this);
+        path[1] = pancakeswapV2Router.WETH();
+
+        _approve(address(this), address(pancakeswapV2Router), _numTokensToSell);
+
+        // make the swap
+        pancakeswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            _numTokensToSell,
+            0, // accept any amount of ETH
+            path,
+            address(this),
+            block.timestamp
+        );
+    }
+
+    function _addLiquidity(uint256 _tokenAmount, uint256 _bnbAmount) private {
+        // approve token transfer to cover all possible scenarios
+        _approve(address(this), address(pancakeswapV2Router), _tokenAmount);
+
+        // add the liquidity
+        pancakeswapV2Router.addLiquidityETH{value: _bnbAmount}(
+            address(this),
+            _tokenAmount,
+            0, // slippage is unavoidable
+            0, // slippage is unavoidable
+            owner(), //TODO Auto Liquidity should go to an unreachable address (DEAD )
+            block.timestamp
+        );
     }
 
     /**
