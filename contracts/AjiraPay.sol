@@ -367,7 +367,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     function setLiquidityPoolFeeFactor(uint _newFeeFactor) public onlyManager(msg.sender){
         require(_newFeeFactor > 0,"Ajira Pay: Liquidity Pool Cannot be less than zero");
         liquidityPoolFactor = _newFeeFactor;
-        minimumTokensBeforeSwap = minimumTokensBeforeSwap.div(_newFeeFactor);
+        minimumTokensBeforeSwap = totalSupply().div(_newFeeFactor);
         emit NewLiquidityFeeFactor(msg.sender, _newFeeFactor, block.timestamp);
     }
 
