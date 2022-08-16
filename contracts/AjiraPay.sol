@@ -265,7 +265,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     uint256 public minimumTokensBeforeSwap;
     uint256 public maxTxAmount;
 
-    uint public constant MAX_FEE_FACTOR = 5000;
+    uint public constant MAX_FEE_FACTOR = 100;
     uint public liquidityPoolFactor;
 
     modifier nonZeroAddress(address _account){
@@ -364,17 +364,17 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         emit NewDevTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
+    function setMarketingFee(uint _fee) public onlyManager(msg.sender){
+        require(_fee > 0, "Ajira Pay: Marketing Treasury Fee Cannot be zero or less");
+        marketingTreasuryFeePercent = _fee;
+        emit NewMarketingTreasuryFee(msg.sender, _fee, block.timestamp);
+    }
+
     function setLiquidityPoolFeeFactor(uint _newFeeFactor) public onlyManager(msg.sender){
         require(_newFeeFactor > 0,"Ajira Pay: Liquidity Pool Cannot be less than zero");
         liquidityPoolFactor = _newFeeFactor;
         minimumTokensBeforeSwap = totalSupply().div(_newFeeFactor);
         emit NewLiquidityFeeFactor(msg.sender, _newFeeFactor, block.timestamp);
-    }
-
-    function setMarketingFee(uint _fee) public onlyManager(msg.sender){
-        require(_fee > 0, "Ajira Pay: Marketing Treasury Fee Cannot be zero or less");
-        marketingTreasuryFeePercent = _fee;
-        emit NewMarketingTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
     function activateTaxHoliday() public onlyManager(msg.sender){
@@ -752,18 +752,27 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
         uint256 initialBalance = address(this).balance;
 
-        // swap tokens for ETH
-        _swapTokensForEth(half);
+        // swap tokens for BNB
+        _swapTokensForBNB(half);
         
-        uint256 newBalance = address(this).balance.sub(initialBalance);
+        uint newBalanceAfterSwap = address(this).balance.sub(initialBalance);
 
-        // add liquidity to uniswap
-        _addLiquidity(otherHalf, newBalance);
+        uint devTreasuryFundsFromFee = _calculateDevTreasuryFee(newBalanceAfterSwap);
+        uint marketingTreasuryFundsFromFee = _calculateMarketingTreasuryFee(newBalanceAfterSwap);
 
-        emit SwapAndLiquidify(half, newBalance, otherHalf);
+        _sendFeeToTreasury(devTreasury, devTreasuryFundsFromFee);
+        _sendFeeToTreasury(marketingTreasury, marketingTreasuryFundsFromFee);
+
+        uint remainingTokenBalanceAfterFeeDeductions = balanceOf(address(this));
+        uint remainingBnbBalanceAfterFeeDeductions = address(this).balance.sub(devTreasuryFundsFromFee).sub(marketingTreasuryFundsFromFee);
+
+        // add liquidity to pancakeswap
+        _addLiquidity(remainingTokenBalanceAfterFeeDeductions, remainingBnbBalanceAfterFeeDeductions);
+
+        emit SwapAndLiquidify(half, remainingBnbBalanceAfterFeeDeductions, otherHalf);
     }
 
-    function _swapTokensForEth(uint256 _numTokensToSell) private {
+    function _swapTokensForBNB(uint256 _numTokensToSell) private {
         // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
         path[0] = address(this);
@@ -779,6 +788,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
             address(this),
             block.timestamp
         );
+
     }
 
     function _addLiquidity(uint256 _tokenAmount, uint256 _bnbAmount) private {
@@ -794,6 +804,10 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
             owner(), //TODO Auto Liquidity should go to an unreachable address (DEAD )
             block.timestamp
         );
+    }
+
+    function _sendFeeToTreasury(address payable _treasury, uint _amount) private{
+        _treasury.transfer(_amount);
     }
 
     /**
