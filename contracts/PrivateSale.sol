@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: UNLICENSED
 /**
  *Submitted for verification at BscScan.com on 2022-08-05
 */
@@ -1264,7 +1265,7 @@ contract PrivateSale is Ownable {
         address _token,
         address _recipient,
         uint256 _MaxValue
-    )public {
+    ) {
 
         tokenAddress = _token;
         recipient = _recipient;
@@ -1472,8 +1473,8 @@ contract PrivateSale is Ownable {
         );
     }
 
-    function recovertokens(address tokenAddress, uint256 tokenAmount) public  onlyOwner {
-        IERC20(tokenAddress).transfer(owner(), tokenAmount);
+    function recovertokens(address _tokenAddress, uint256 tokenAmount) public  onlyOwner {
+        IERC20(_tokenAddress).transfer(owner(), tokenAmount);
     }
 
     function recovereBnb(address payable destination) public onlyOwner {

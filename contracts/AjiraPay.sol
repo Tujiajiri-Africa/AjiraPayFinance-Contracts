@@ -254,6 +254,9 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
     bool isInTaxHolidayPhase = false;
 
+    address private pancakeswapTestnetRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
+    address private pancakeswapMainnetRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+
     IPancakeRouter02 public pancakeswapV2Router;
     address public pancakeswapV2Pair;
 
@@ -396,7 +399,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         IERC20 token = IERC20(_token);
         token.safeTransfer(msg.sender, _amount);
         emit ERC20TokenRecovered(_token, msg.sender, _amount, block.timestamp);
-        require(_token != address(this), "Owner cannot claim native tokens");
+        require(_token != address(this), "Ajira Pay: Owner cannot claim native tokens");
         if (_token == address(0x0)) {
             payable(msg.sender).transfer(address(this).balance);
             return;
@@ -670,16 +673,8 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         if(excludedFromFee[_from] || excludedFromFee[_to]){
             takeFee = false;
         }
-        /*
-        uint256 fromBalance = balances[_from];
-        require(fromBalance >= _amount, "Ajira Pay: transfer amount exceeds balance");
-        unchecked {
-            balances[_from] = fromBalance.sub(_amount);
-        }
-        balances[_to] = balances[_to].add(_amount);
 
-        emit Transfer(_from, _to, _amount);
-        **/
+        //_performTokenTransfer(from, to, amount, takeFee);
         _afterTokenTransfer(_from, _to, _amount);
     }
 
@@ -800,7 +795,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
             _tokenAmount,
             0, // slippage is unavoidable
             0, // slippage is unavoidable
-            owner(), //TODO Auto Liquidity should go to an unreachable address (DEAD )
+            DEAD, //owner(), //TODO Auto Liquidity should go to an unreachable address (DEAD )
             block.timestamp
         );
     }
@@ -809,6 +804,30 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         _treasury.transfer(_amount);
     }
 
+    function _performTokenTransfer(address _from, address _to, uint _amount, bool _takeFee) private returns(bool){
+        if(excludedFromFee[_from] || excludedFromFee[_to]){
+            _transferBothExcluded(_from, _to, _amount);
+        }
+
+    }
+
+    function _transferFromExcluded(address _from, address _to, uint _amount) private returns(bool){
+
+    }
+
+    function _transferBothExcluded(address _from, address _to, uint _amount) private returns(bool){
+
+    }
+
+    function _transferToExcluded(address _from, address _to, uint _amount) private returns(bool){
+
+    }
+
+    function transferStandard(address _from, address _to, uint _amount) private returns(bool){
+        
+    }
+    
+    
     /**
      * @dev Hook that is called before any transfer of tokens. This includes
      * minting and burning.
