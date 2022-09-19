@@ -327,7 +327,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         _decimals = 18;
         _totalSupply = 200_000_000 * (10 ** _decimals);
         
-        liquidityPoolFactor = 100000;
+        liquidityPoolFactor = 1000;
         minimumTokensBeforeSwap = _totalSupply.div(liquidityPoolFactor);
         //maxTxAmount = 5000_000 * 10** _decimals;
         
@@ -657,7 +657,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         require(_from != address(0), "Ajira Pay: transfer from the zero address");
         require(_to != address(0), "Ajira Pay: transfer to the zero address");
 
-        _beforeTokenTransfer(_from, _to, _amount);
+        //_beforeTokenTransfer(_from, _to, _amount);
 
         uint256 contractTokenBalance = balanceOf(address(this));
 
@@ -674,8 +674,8 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
             takeFee = false;
         }
 
-        //_performTokenTransfer(from, to, amount, takeFee);
-        _afterTokenTransfer(_from, _to, _amount);
+        _performTokenTransfer(_from, _to, _amount, takeFee);
+        //_afterTokenTransfer(_from, _to, _amount);
     }
 
     function _approve(
@@ -804,11 +804,22 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         _treasury.transfer(_amount);
     }
 
-    function _performTokenTransfer(address _from, address _to, uint _amount, bool _takeFee) private returns(bool){
-        if(excludedFromFee[_from] || excludedFromFee[_to]){
+    function _performTokenTransfer(address _from, address _to, uint _amount, bool _takeFee) private {
+        if(!_takeFee) _removeAllFee();
+
+        if(excludedFromFee[_from] && excludedFromFee[_to]){
             _transferBothExcluded(_from, _to, _amount);
         }
-
+        else if(excludedFromFee[_from] && !excludedFromFee[_to]){
+            _transferFromExcluded(_from, _to, _amount);
+        }
+        else if(!excludedFromFee[_from] && excludedFromFee[_to]){
+            _transferToExcluded(_from, _to, _amount);
+        }
+        else{
+            _transferStandard(_from, _to, _amount);
+        }
+        if(!_takeFee) _removeAllFee();
     }
 
     function _transferFromExcluded(address _from, address _to, uint _amount) private returns(bool){
@@ -823,10 +834,16 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
     }
 
-    function transferStandard(address _from, address _to, uint _amount) private returns(bool){
-        
+    function _transferStandard(address _from, address _to, uint _amount) private returns(bool){
+        balances[_from] = balances[_from].sub(_amount);
+        balances[_to] = balances[_to].add(_amount);
+        emit Transfer(_from, _to, _amount);
+        return true;
     }
     
+    function _removeAllFee() private{
+
+    }
     
     /**
      * @dev Hook that is called before any transfer of tokens. This includes
