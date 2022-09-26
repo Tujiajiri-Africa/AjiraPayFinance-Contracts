@@ -1295,7 +1295,7 @@ contract PrivateSale is Ownable {
         isPresaleOpen = true;
     }
 
-    function closePrsale() external onlyOwner {
+    function closePresale() external onlyOwner {
         require(isPresaleOpen, "Presale is not open yet.");
 
         isPresaleOpen = false;
