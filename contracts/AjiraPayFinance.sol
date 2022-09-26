@@ -10,7 +10,7 @@ import '@openzeppelin/contracts/access/AccessControl.sol';
 contract AjiraPayFinance is Ownable, ERC1363, ReentrancyGuard,AccessControl{
     using SafeERC20 for IERC20;
 
-    uint256 private _initialSupply = 200_000_000 * 1e18;
+    uint256 private _totalSupply = 200_000_000 * 1e18;
     string private _name = 'Ajira Pay Finance';
     string private _symbol = 'AJP';
 
@@ -25,8 +25,8 @@ contract AjiraPayFinance is Ownable, ERC1363, ReentrancyGuard,AccessControl{
     constructor() ERC20(_name, _symbol){
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(MANAGER_ROLE, _msgSender());
-        _mint(msg.sender, _initialSupply);
-        treasury = payable(msg.sender);
+        _mint(_msgSender(), _totalSupply);
+        treasury = payable(_msgSender());
     }
 
     function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1363, AccessControl) returns (bool) {
@@ -53,7 +53,7 @@ contract AjiraPayFinance is Ownable, ERC1363, ReentrancyGuard,AccessControl{
     
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE){
         require(_newTreasury != address(0),"Invalid Address");
-        if(treasury == _newTreasury) return;
+        if(treasury == payable(_newTreasury)) return;
         address prevTreasury = treasury;
         treasury = payable(_newTreasury);
         emit TreasuryUpdated(msg.sender, prevTreasury, _newTreasury, block.timestamp);
