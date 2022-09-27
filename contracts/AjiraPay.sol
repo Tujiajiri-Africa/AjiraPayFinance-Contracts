@@ -8,7 +8,6 @@ import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import 'erc-payable-token/contracts/token/ERC1363/IERC1363.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
-import '@openzeppelin/contracts/utils/Counters.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/utils/introspection/IERC165.sol';
 import '@openzeppelin/contracts/utils/introspection/ERC165.sol';
@@ -17,36 +16,22 @@ import "./interfaces/IPancakeRouter02.sol";
 import "./interfaces/IPancakeswapV2Factory.sol";
 import "./interfaces/IERC1363Spender.sol";
 import "./interfaces/IERC1363Receiver.sol";
+import './AjiraPayWhiteList.sol';
 
-contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver, ERC165,AccessControl, IERC1363{
+contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
     using SafeMath for uint256;
-    using Counters for Counters.Counter;
     using SafeERC20 for IERC20;
     using Address for address;
-
-    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
     string private _name;
     string private _symbol;
     uint private _decimals;
     uint private _totalSupply;
 
-    address payable public devTreasury;
-    address payable public marketingTreasury;
-
-    uint public devTreasuryFeePercent = 1;
-    uint public marketingTreasuryFeePercent = 1;
-
     mapping(address => uint) private balances;
     mapping(address => mapping(address => uint)) private allowances;
 
     mapping(address => bool) public excludedFromFee;
-    mapping(address => bool) public isBlacklistedAddress;
-
-    mapping(address => bool) public isWhiteListedMerchant;
-    address[] public whiteListedMerchants;
-
-    bool isInTaxHolidayPhase = false;
 
     address private pancakeswapTestnetRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
     address private pancakeswapMainnetRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
@@ -65,11 +50,6 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     uint public constant MAX_FEE_FACTOR = 100;
     uint public liquidityPoolFactor;
 
-    modifier nonZeroAddress(address _account){
-        require(_account != address(0), "Ajira Pay: Zero Address detected");
-        _;
-    }
-
     modifier lockTheSwap {
         inSwapAndLiquify = true;
         _;
@@ -80,21 +60,10 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         require(hasRole(MANAGER_ROLE, _account),"Ajira Pay: An unauthorized account");
         _;
     }
-
-    event NewDevTreasury(address indexed account, address indexed caller, uint indexed timestamp);
-    event NewMarketingTreasury(address indexed account, address indexed caller, uint indexed timestamp);
-    event TaxHolidayActivated(address indexed caller, uint indexed timestamp);
-    event NewDevTreasuryFee(address indexed caller, uint indexed newDevTreasuryFee, uint timestamp);
-    event NewMarketingTreasuryFee(address indexed caller, uint indexed newMarketingTresuryFee, uint indexed timestamp);
-    event EthWithdrawal(address indexed caller, uint indexed amount, uint indexed timestamp);
+    
     event NewRouterAddressSet(address indexed caller, address indexed newAddress, uint indexed timestamp);
     event ExcludeFromFee(address indexed caller, address indexed account, uint timestamp);
     event IncludeInFee(address indexed caller, address indexed account, uint timestamp);
-    event ERC20TokenRecovered(address indexed token, address indexed beneficiary, uint indexed amount,uint timestamp);
-    event NewBlackListAction(address indexed caller, address indexed blackListedAccount, uint timestamp);
-    event AccountRemovedFromBlackList(address indexed caller, address indexed blackListedAccount, uint timestamp);
-    event NewMerchantWhiteListed(address indexed caller, address indexed merchantAccount, uint indexed timestamp);
-    event MerchantDelisted(address indexed caller, address indexed merchantAccount, uint timestamp);
     event MinLiquidityAmountUpdated(address indexed caller, uint newAmount, uint indexed timestamp);
     event SwapAndLiquidify(uint256 tokensSwapped, uint256 bnbReceived, uint256 tokensIntoLiqudity);
     event NewLiquidityFeeFactor(address caller, uint newFeeFactor, uint timestamp);
@@ -102,7 +71,7 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
 
-        _setupRole(MANAGER_ROLE, _msgSender());
+        _grantRole(MANAGER_ROLE, _msgSender());
 
         IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
@@ -131,34 +100,8 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
     function supportsInterface(bytes4 interfaceId) public view virtual override(AccessControl,ERC165, IERC165) returns (bool) {
         return 
-            interfaceId == type(IERC1363Spender).interfaceId ||
-            interfaceId == type(IERC1363Receiver).interfaceId ||
             interfaceId == type(IERC1363).interfaceId ||
             super.supportsInterface(interfaceId);
-    }
-
-    function setDevTreasury(address payable _devTreasury) public nonZeroAddress(_devTreasury) onlyManager(msg.sender){
-        if(_devTreasury == devTreasury) return;
-        devTreasury = _devTreasury;
-        emit NewDevTreasury(_devTreasury, msg.sender, block.timestamp);
-    }
-
-    function setMarketingTreasury(address payable _marketingTreasury) public nonZeroAddress(_marketingTreasury) onlyManager(msg.sender){
-        if(_marketingTreasury == marketingTreasury) return;
-        marketingTreasury = _marketingTreasury;
-        emit NewMarketingTreasury(_marketingTreasury, msg.sender, block.timestamp);
-    }
-
-    function setDevFee(uint _fee) public onlyManager(msg.sender){
-        require(_fee > 0, "Ajira Pay: Dev Treasury Fee Cannot be zero or less");
-        devTreasuryFeePercent = _fee;
-        emit NewDevTreasuryFee(msg.sender, _fee, block.timestamp);
-    }
-
-    function setMarketingFee(uint _fee) public onlyManager(msg.sender){
-        require(_fee > 0, "Ajira Pay: Marketing Treasury Fee Cannot be zero or less");
-        marketingTreasuryFeePercent = _fee;
-        emit NewMarketingTreasuryFee(msg.sender, _fee, block.timestamp);
     }
 
     function setLiquidityPoolFeeFactor(uint _newFeeFactor) public onlyManager(msg.sender){
@@ -168,29 +111,8 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         emit NewLiquidityFeeFactor(msg.sender, _newFeeFactor, block.timestamp);
     }
 
-    function activateTaxHoliday() public onlyManager(msg.sender){
-        isInTaxHolidayPhase = true;
-        emit TaxHolidayActivated(msg.sender, block.timestamp);
-    }
-
-    function deActivateTaxHoliday() public onlyManager(msg.sender){
-        isInTaxHolidayPhase = false;
-        emit TaxHolidayActivated(msg.sender, block.timestamp);
-    }
-
     receive() external payable{}
  
-    function recoverLostTokensForInvestor(address _token, uint _amount) public nonReentrant onlyManager(msg.sender){
-        IERC20 token = IERC20(_token);
-        token.safeTransfer(msg.sender, _amount);
-        emit ERC20TokenRecovered(_token, msg.sender, _amount, block.timestamp);
-        require(_token != address(this), "Ajira Pay: Owner cannot claim native tokens");
-        if (_token == address(0x0)) {
-            payable(msg.sender).transfer(address(this).balance);
-            return;
-        }
-    }
-
     function name() public view returns(string memory){return _name;}
 
     function symbol() public view returns(string memory){return _symbol;}
@@ -237,14 +159,6 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
         return true;
     }
 
-    function recoverEth(uint _amount) public nonReentrant onlyManager(msg.sender) returns(bool){
-        uint contractBalance = address(this).balance;
-        require(_amount >= contractBalance,"Ajira Pay: Insufficient Withdrawal Balance");
-        payable(msg.sender).transfer(_amount);
-        emit EthWithdrawal(msg.sender, _amount, block.timestamp);
-        return true;
-    }
-
     function setNewRouterAddress(address _router) public nonZeroAddress(_router) onlyManager(msg.sender)returns(bool){
         IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
@@ -270,33 +184,6 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
     function includeInFee(address _account) public nonZeroAddress(_account) onlyManager(msg.sender)returns(bool){
         excludedFromFee[_account] = false;
         emit IncludeInFee(msg.sender, _account, block.timestamp);
-        return true;
-    }
-
-    function addToBlackList(address _account) public nonZeroAddress(_account)onlyManager(msg.sender) returns(bool){
-        isBlacklistedAddress[_account] = true;
-        emit NewBlackListAction(msg.sender, _account, block.timestamp);
-        return true;
-    }
-
-    function removeFromBlackList(address _account) public nonZeroAddress(_account) onlyManager(msg.sender)returns(bool){
-        isBlacklistedAddress[_account] = false;
-        emit AccountRemovedFromBlackList(msg.sender, _account, block.timestamp);
-        return true;
-    }
-
-    function whiteListMerchant(address _merchant) public nonZeroAddress(_merchant) onlyManager(msg.sender)returns(bool){
-        require(isWhiteListedMerchant[_merchant] == false,"Ajira Pay: Merchant is Listed");
-        isWhiteListedMerchant[_merchant] = true;
-        whiteListedMerchants.push(_merchant);
-        emit NewMerchantWhiteListed(msg.sender, _merchant, block.timestamp);
-        return true;
-    }
-
-    function deListMerchant(address _merchant) public nonZeroAddress(_merchant) onlyManager(msg.sender)returns(bool){
-        require(isWhiteListedMerchant[_merchant] == true,"Ajira Pay: Merchant is DeListed");
-        isWhiteListedMerchant[_merchant] = false;
-        emit MerchantDelisted(msg.sender, _merchant, block.timestamp);
         return true;
     }
 
@@ -335,7 +222,6 @@ contract AjiraPay is Ownable,ReentrancyGuard, IERC1363Spender, IERC1363Receiver,
 
     function onApprovalReceived(address sender,uint256 amount,bytes calldata data) external returns (bytes4){}
 
-    //Internal Functions 
     function _checkAndCallTransfer(address sender,address recipient,uint256 amount,bytes memory data) internal virtual returns (bool) {
         if (!recipient.isContract()) {
             return false;
