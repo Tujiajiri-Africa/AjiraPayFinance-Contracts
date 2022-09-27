@@ -7,7 +7,7 @@ import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/access/AccessControl.sol';
 
-contract AjiraPayFinance is Ownable, ERC1363, ReentrancyGuard,AccessControl{
+contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl{
     using SafeERC20 for IERC20;
 
     uint256 private _totalSupply = 200_000_000 * 1e18;
