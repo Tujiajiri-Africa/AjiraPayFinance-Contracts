@@ -67,6 +67,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         require(isExistingWinner[_beneficiary] = true,"Not a beneficiary");
         uint rewardAmount = userRewards[_beneficiary];
         rewardToken.transfer(_beneficiary,rewardAmount);
+        userRewards[_beneficiary] = 0;
         emit NewAirdropPayout(_msgSender(),_beneficiary, rewardAmount, block.timestamp);
     }
 
