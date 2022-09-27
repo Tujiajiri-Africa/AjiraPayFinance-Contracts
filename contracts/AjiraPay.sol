@@ -242,6 +242,8 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
         require(_from != address(0), "Ajira Pay: transfer from the zero address");
         require(_to != address(0), "Ajira Pay: transfer to the zero address");
 
+        //_beforeTokenTransfer(_from, _to, _amount);
+
         uint256 contractTokenBalance = balanceOf(address(this));
 
         bool overMinTokenBalance = contractTokenBalance >= minimumTokensBeforeSwap;
@@ -256,7 +258,9 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
         if(excludedFromFee[_from] || excludedFromFee[_to]){
             takeFee = false;
         }
+
         _performTokenTransfer(_from, _to, _amount, takeFee);
+        //_afterTokenTransfer(_from, _to, _amount);
     }
 
     function _approve(address _owner,address _spender,uint256 _amount) internal virtual {
