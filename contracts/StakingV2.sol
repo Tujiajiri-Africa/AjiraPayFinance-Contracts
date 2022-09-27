@@ -1,10 +1,7 @@
-/**
- *Submitted for verification at Etherscan.io on 2022-09-09
-*/
-
+// SPDX-License-Identifier: MIT
 // File: contracts/IERC900.sol
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.9;
 
 interface IERC900 {
 
@@ -29,7 +26,7 @@ interface IERC900 {
 
 // OpenZeppelin Contracts (last updated v4.6.0) (token/ERC20/IERC20.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.9;
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -111,9 +108,14 @@ interface IERC20 {
 
 // File: contracts/SpiExtStaking.sol
 
-pragma solidity ^0.8.0;
 
-contract StakingV2 is IERC900 {
+
+pragma solidity ^0.8.9;
+
+
+
+
+contract SpiExtStaking is IERC900 {
     // Token used for staking
     IERC20 stakingToken;
 

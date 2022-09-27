@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 /**
  *Submitted for verification at BscScan.com on 2022-08-05
 */
