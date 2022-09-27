@@ -7,18 +7,24 @@
 const hre = require("hardhat");
 
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-  const unlockTime = currentTimestampInSeconds + ONE_YEAR_IN_SECS;
+  //const currentTimestampInSeconds = Math.round(Date.now() / 1000);
+  //const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
+  //const unlockTime = currentTimestampInSeconds + ONE_YEAR_IN_SECS;
 
-  const lockedAmount = hre.ethers.utils.parseEther("1");
+  //const lockedAmount = hre.ethers.utils.parseEther("1");
 
-  const Lock = await hre.ethers.getContractFactory("Lock");
-  const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
+  //const Lock = await hre.ethers.getContractFactory("Lock");
+  //const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
 
-  await lock.deployed();
+  const pancakeswapTestnetRouter = '0x6725F303b657a9451d8BA641348b6761A6CC7a17';
+  const pancakeswapMainnetRouter = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
 
-  console.log("Lock with 1 ETH deployed to:", lock.address);
+  const AjiraPayFinanceToken = await hre.ethers.getContractFactory('AjiraPayFinanceToken')
+  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy()
+
+  await ajiraPayFinanceToken.deployed();
+
+  console.log("Ajira Pay deployed to:", ajiraPayFinanceToken.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere

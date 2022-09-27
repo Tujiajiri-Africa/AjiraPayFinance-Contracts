@@ -1,17 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
-import '@openzeppelin/contracts/access/Ownable.sol';
-import '@openzeppelin/contracts/access/AccessControl.sol';
-import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
-//import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
 import 'erc-payable-token/contracts/token/ERC1363/IERC1363.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
-import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import '@openzeppelin/contracts/utils/introspection/IERC165.sol';
 import '@openzeppelin/contracts/utils/introspection/ERC165.sol';
-import '@openzeppelin/contracts/utils/Address.sol';
 import "./interfaces/IPancakeRouter02.sol";
 import "./interfaces/IPancakeswapV2Factory.sol";
 import "./interfaces/IERC1363Spender.sol";
@@ -20,7 +12,6 @@ import './AjiraPayWhiteList.sol';
 
 contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
     using SafeMath for uint256;
-    using SafeERC20 for IERC20;
     using Address for address;
 
     string private _name;
@@ -56,11 +47,6 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
         inSwapAndLiquify = false;
     }
 
-    modifier onlyManager(address _account){
-        require(hasRole(MANAGER_ROLE, _account),"Ajira Pay: An unauthorized account");
-        _;
-    }
-    
     event NewRouterAddressSet(address indexed caller, address indexed newAddress, uint indexed timestamp);
     event ExcludeFromFee(address indexed caller, address indexed account, uint timestamp);
     event IncludeInFee(address indexed caller, address indexed account, uint timestamp);
@@ -70,8 +56,6 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
 
     constructor(address _router){
         require(_router != address(0),"Ajira Pay: Zero Address detected");
-
-        _grantRole(MANAGER_ROLE, _msgSender());
 
         IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
@@ -104,7 +88,7 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
             super.supportsInterface(interfaceId);
     }
 
-    function setLiquidityPoolFeeFactor(uint _newFeeFactor) public onlyManager(msg.sender){
+    function setLiquidityPoolFeeFactor(uint _newFeeFactor) public onlyRole(MANAGER_ROLE){
         require(_newFeeFactor > 0,"Ajira Pay: Liquidity Pool Cannot be less than zero");
         liquidityPoolFactor = _newFeeFactor;
         minimumTokensBeforeSwap = totalSupply().div(_newFeeFactor);
@@ -159,7 +143,7 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
         return true;
     }
 
-    function setNewRouterAddress(address _router) public nonZeroAddress(_router) onlyManager(msg.sender)returns(bool){
+    function setNewRouterAddress(address _router) public nonZeroAddress(_router) onlyRole(MANAGER_ROLE) returns(bool){
         IPancakeRouter02 _pancakeswapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeswapV2Router.factory())
             .createPair(address(this), _pancakeswapV2Router.WETH());
@@ -168,20 +152,20 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
         return true;
     }
 
-    function setMinTokensToAddLiquidityBeforeSwap(uint _amount) onlyManager(msg.sender) public returns(bool){
+    function setMinTokensToAddLiquidityBeforeSwap(uint _amount) onlyRole(MANAGER_ROLE) public returns(bool){
         require(_amount != 0,"Ajira Pay: Zero Amount for liquidity not allowed");
         minimumTokensBeforeSwap = _amount;
         emit MinLiquidityAmountUpdated(msg.sender, _amount, block.timestamp);
         return true;
     }
 
-    function excludeFromFee(address _account) public nonZeroAddress(_account) onlyManager(msg.sender)returns(bool){
+    function excludeFromFee(address _account) public nonZeroAddress(_account) onlyRole(MANAGER_ROLE) returns(bool){
         excludedFromFee[_account] = true;
         emit ExcludeFromFee(msg.sender, _account, block.timestamp);
         return true;
     }
 
-    function includeInFee(address _account) public nonZeroAddress(_account) onlyManager(msg.sender)returns(bool){
+    function includeInFee(address _account) public nonZeroAddress(_account) onlyRole(MANAGER_ROLE) returns(bool){
         excludedFromFee[_account] = false;
         emit IncludeInFee(msg.sender, _account, block.timestamp);
         return true;
@@ -242,8 +226,6 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
         require(_from != address(0), "Ajira Pay: transfer from the zero address");
         require(_to != address(0), "Ajira Pay: transfer to the zero address");
 
-        //_beforeTokenTransfer(_from, _to, _amount);
-
         uint256 contractTokenBalance = balanceOf(address(this));
 
         bool overMinTokenBalance = contractTokenBalance >= minimumTokensBeforeSwap;
@@ -260,7 +242,6 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
         }
 
         _performTokenTransfer(_from, _to, _amount, takeFee);
-        //_afterTokenTransfer(_from, _to, _amount);
     }
 
     function _approve(address _owner,address _spender,uint256 _amount) internal virtual {
@@ -324,7 +305,6 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
 
         uint256 initialBalance = address(this).balance;
 
-        // swap tokens for BNB
         _swapTokensForBNB(half);
         
         uint newBalanceAfterSwap = address(this).balance.sub(initialBalance);
@@ -337,14 +317,12 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
 
         uint remainingBnbBalanceAfterFeeDeductions = address(this).balance.sub(devTreasuryFundsFromFee).sub(marketingTreasuryFundsFromFee);
 
-        // add liquidity to pancakeswap
         _addLiquidity(otherHalf, remainingBnbBalanceAfterFeeDeductions);
 
         emit SwapAndLiquidify(half, remainingBnbBalanceAfterFeeDeductions, otherHalf);
     }
 
     function _swapTokensForBNB(uint256 _numTokensToSell) private {
-        // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = pancakeswapV2Router.WETH();
@@ -363,16 +341,13 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
     }
 
     function _addLiquidity(uint256 _tokenAmount, uint256 _bnbAmount) private {
-        // approve token transfer to cover all possible scenarios
         _approve(address(this), address(pancakeswapV2Router), _tokenAmount);
-
-        // add the liquidity
         pancakeswapV2Router.addLiquidityETH{value: _bnbAmount}(
             address(this),
             _tokenAmount,
             0, // slippage is unavoidable
             0, // slippage is unavoidable
-            DEAD, //owner(), //TODO Auto Liquidity should go to an unreachable address (DEAD )
+            owner(),
             block.timestamp
         );
     }

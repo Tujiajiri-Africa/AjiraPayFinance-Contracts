@@ -45,10 +45,14 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     }
 
     // to help users who accidentally send their tokens to this contract
-    function recoverTokens(address _token, address _account, uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
-        require(_token != address(this),"Invalid Token");
-        IERC20(_token).safeTransfer(_account, _amount);
-        emit ERC20TokenRecovered(msg.sender, _account, _amount, block.timestamp);
+    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant {
+        require(_token != address(this), "Invalid Token Address");
+        if (_token == address(0x0)) {
+            treasury.transfer(address(this).balance);
+            return;
+        }
+        IERC20(_token).safeTransfer(msg.sender, _amount);
+        emit ERC20TokenRecovered(_token, msg.sender, _amount, block.timestamp);
     }
     
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE){
