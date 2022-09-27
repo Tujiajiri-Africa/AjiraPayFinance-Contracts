@@ -42,7 +42,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function activateAirdrop() public onlyRole(MANAGER_ROLE) isNotActive{
-        emit AirdropActivated(_msgSender(), token, );
+        emit AirdropActivated(_msgSender(), token, block.timestamp);
     }
 
     function deactivateAirdrop() public onlyRole(MANAGER_ROLE) isActive{
