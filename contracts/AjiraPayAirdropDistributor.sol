@@ -12,6 +12,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     IERC20 public rewardToken;
 
     bool public isAirdropActive = false;
+    bool canClaim = false;
 
     bytes32 constant public MANAGER_ROLE = keccak256('MANAGER_ROLE');
 
@@ -27,6 +28,8 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     event RewardTokenSet(address indexed caller, IERC20 indexed token, uint timestamp);
     event NewWinner(address indexed caller, address indexed winner, uint indexed amount, uint timestamp);
     event NewAirdropPayout(address indexed caller, address indexed beneciary, uint indexed amount, uint timestamp);
+    event Claim(address indexed beneficiary, uint indexed amount, uint timestamp);
+    event UserRewardUpdated(address indexed beneficiary, uint indexed prevRewardAmount, uint indexed newRewardAmount, uint timestamp);
 
     modifier isActive(){
         require(isAirdropActive == true,"Airdrop not active");
@@ -40,6 +43,11 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
 
     modifier nonZeroAddress(address _account){
         require(_account != address(0),"Invalid Account");
+        _;
+    }
+
+    modifier isExistingWinnerAccount(address _account){
+        require(isExistingWinner[_account] == true,"Not a beneficiary");
         _;
     }
 
@@ -76,6 +84,17 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         emit NewWinner(_msgSender(), _winner, _amount, block.timestamp);
     }
 
+    function updateWinnerReward(address _winner, uint _newRewardAmount) public nonZeroAddress(_winner) isExistingWinnerAccount(_winner) onlyRole(MANAGER_ROLE)  {
+        uint256 rewardBefore = userRewards[_winner];
+        require(_newRewardAmount > 0,"Amount is zero");
+        require(_newRewardAmount < rewardToken.totalSupply() && _newRewardAmount <= maxRewardCapPerUser,"Cannot send total supply");
+        require(rewardBefore.add(_newRewardAmount) < rewardToken.totalSupply(),"");
+        
+        userRewards[_winner] = rewardBefore.add(_newRewardAmount);
+        uint256 rewardAfter = userRewards[_winner];
+        emit UserRewardUpdated(_winner, rewardBefore, rewardAfter, block.timestamp);
+    }
+
     function distributeReward(address _beneficiary) public nonZeroAddress(_beneficiary) hasNotClaimedReward(_beneficiary) onlyRole(MANAGER_ROLE) isActive{
         require(isExistingWinner[_beneficiary] = true,"Not a beneficiary");
         uint256 rewardAmount = userRewards[_beneficiary];
@@ -90,11 +109,18 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         emit RewardTokenSet(_msgSender(), rewardToken, block.timestamp);
     }
 
-    function claimAirdrop() public{
-
+    function claimAirdrop() public hasNotClaimedReward(msg.sender){
+        uint256 rewardAmount = userRewards[msg.sender];
+        require(rewardToken.transfer(msg.sender, rewardAmount),"Failed To Claim");
+        emit Claim(msg.sender, rewardAmount, block.timestamp);
     }
 
     function getAirdropTotalSupply() public view returns(uint256){
         return rewardToken.balanceOf(address(this));
+    }
+
+    function activateClaims() public onlyRole(MANAGER_ROLE){
+        canClaim = true;
+        //TODO add more logic here including validations and events
     }
 }
