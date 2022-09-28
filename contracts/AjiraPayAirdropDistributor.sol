@@ -48,13 +48,14 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
-    constructor(IERC20 _token, uint _maxRewardCap, uint _tokenDecimals){
+    constructor(IERC20 _token, uint _minRewardCap, uint _maxRewardCap, uint _tokenDecimals){
+        require(_tokenDecimals > 0 && _tokenDecimals <= 18,"Invalid Decimals Number");
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(MANAGER_ROLE, _msgSender());
         
         rewardToken = _token;
-        minRewardCapPerUser = 0;
-        maxRewardCapPerUser = _maxRewardCap * (10 ** _tokenDecimals);
+        minRewardCapPerUser = _minRewardCap.mul(10 ** _tokenDecimals);
+        maxRewardCapPerUser = _maxRewardCap.mul(10 ** _tokenDecimals);
     }
 
     function activateAirdrop() public onlyRole(MANAGER_ROLE) isNotActive{
