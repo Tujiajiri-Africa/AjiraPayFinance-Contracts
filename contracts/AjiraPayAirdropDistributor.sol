@@ -11,12 +11,12 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
+    bytes32 constant public MANAGER_ROLE = keccak256('MANAGER_ROLE');
+
     IERC20 public rewardToken;
 
     bool public isAirdropActive = false;
     bool public isClaimOpen = false;
-
-    bytes32 constant public MANAGER_ROLE = keccak256('MANAGER_ROLE');
 
     mapping(address => uint) public userRewards;
     mapping(address => bool) public isExistingWinner;
@@ -24,10 +24,14 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
 
     uint public maxRewardCapPerUser;
     uint public minRewardCapPerUser;
+    uint public tokenDecimals;
+
+    address payable public treasury;
 
     event AirdropActivated(address indexed caller, IERC20 indexed token, uint indexed timestamp);
     event AirdropDeActivated(address indexed caller, IERC20 indexed token, uint indexed timestamp);
     event RewardTokenSet(address indexed caller, IERC20 indexed token, uint timestamp);
+    event RewardTokenUpdated(address indexed caller, IERC20 indexed prevToken,IERC20 indexed newToken, uint timestamp);
     event NewWinner(address indexed caller, address indexed winner, uint indexed amount, uint timestamp);
     event ClaimFor(address indexed caller, address indexed beneciary, uint indexed amount, uint timestamp);
     event Claim(address indexed beneficiary, uint indexed amount, uint timestamp);
@@ -35,6 +39,11 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     event ClaimsOpened(address indexed caller, uint indexed timestamp);
     event ClaimsClosed(address indexed caller, uint indexed timestamp);
     event UserRewardCancelled(address indexed caller, address indexed beneficiary, uint indexed rewardAmount, uint timestamp);
+    event BNBRecovered(address indexed caller, address indexed destinationAccount, uint indexed amount, uint timestamp);
+    event ERC20Recovered(address indexed caller, address indexed destinationAccount, uint indexed _amount, IERC20 token, uint timestamp);
+    event TreasuryUpdated(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
+    event MinRewardCapUpdated(address indexed caller, uint indexed prevMinRewardCapPerUser, uint indexed newMinRewardCapPerUser, uint timestamp);
+    event MaxRewardCapUpdated(address indexed caller, uint indexed prevMaxRewardCapPerUser, uint indexed newMaxRewardCapPerUser, uint timestamp);
 
     modifier isActive(){
         require(isAirdropActive == true,"Airdrop not active");
@@ -77,13 +86,18 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     }
 
     constructor(IERC20 _token, uint _minRewardCap, uint _maxRewardCap, uint _tokenDecimals){
-        require(_tokenDecimals > 0 && _tokenDecimals <= 18,"Invalid Decimals Number");
+        require(_tokenDecimals > 0 && _tokenDecimals <= 18,"Invalid Decimals");
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(MANAGER_ROLE, _msgSender());
         
         rewardToken = _token;
-        minRewardCapPerUser = _minRewardCap.mul(10 ** _tokenDecimals);
-        maxRewardCapPerUser = _maxRewardCap.mul(10 ** _tokenDecimals);
+        tokenDecimals = _tokenDecimals;
+        
+        minRewardCapPerUser = _minRewardCap.mul(10 ** tokenDecimals);
+        maxRewardCapPerUser = _maxRewardCap.mul(10 ** tokenDecimals);
+        
+
+        treasury = payable(_msgSender());
     }
 
     function activateAirdrop() public onlyRole(MANAGER_ROLE) isNotActive{
@@ -133,6 +147,27 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         emit RewardTokenSet(_msgSender(), rewardToken, block.timestamp);
     }
 
+    function updateRewardToken(address _token) public nonZeroAddress(_token) onlyRole(MANAGER_ROLE) isNotActive{
+        if(IERC20(_token) == rewardToken){ return;}
+        IERC20 prevRewardToken = rewardToken;
+        rewardToken = IERC20(_token);
+        emit RewardTokenUpdated(_msgSender(), prevRewardToken, rewardToken, block.timestamp);
+    }
+
+    function updateMinRewardCap(uint _amount) public onlyRole(MANAGER_ROLE) isNotActive{
+        uint currentMinRewardCap = minRewardCapPerUser;
+        (uint256 minRewardCap, ) = _getRewardAmountByType();
+        _updateReward(minRewardCap,_amount);
+        emit MinRewardCapUpdated(_msgSender(), currentMinRewardCap, minRewardCapPerUser, block.timestamp);
+    }
+
+    function updateMaxRewardCap(uint _amount) public onlyRole(MANAGER_ROLE) isNotActive{
+        uint currentMaxRewardCap = maxRewardCapPerUser;
+        ( , uint256 maxRewardCap) = _getRewardAmountByType();
+        _updateReward(maxRewardCap,_amount);
+        emit MaxRewardCapUpdated(_msgSender(), currentMaxRewardCap, maxRewardCapPerUser, block.timestamp);
+    }
+
     function activateClaims() public onlyRole(MANAGER_ROLE) isActive claimClosed{
         isClaimOpen = true;
         emit ClaimsOpened(_msgSender(), block.timestamp);
@@ -154,6 +189,28 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         return (_account, userRewards[_account]);
     }
 
+    receive() external payable{}
+
+    function recoverBNB() public onlyRole(MANAGER_ROLE) nonZeroAddress(_msgSender()) nonReentrant{
+        treasury.transfer(address(this).balance);
+        emit BNBRecovered(_msgSender(), treasury, address(this).balance, block.timestamp);
+    }
+
+    function recoverLostTokensForInvestor(address _token, address _account, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant nonZeroAddress(_account){
+        require(_token != address(rewardToken),"Invalid Token");
+        require(_amount > 0, "Invalid Amount");
+        IERC20 token = IERC20(_token);
+        token.safeTransfer(_account, _amount);
+        emit ERC20Recovered(_msgSender(), _account, _amount, token, block.timestamp);
+    }
+
+    function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury){
+        if(payable(_newTreasury) == treasury){ return;}
+        address payable prevTreasury = treasury;
+        treasury = payable(_newTreasury);
+        emit TreasuryUpdated(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
+    }
+
     //Internal functions
     function _performClaim(address _beneficiary) private nonZeroAddress(_beneficiary) isExistingWinnerAccount(_beneficiary) hasNotClaimedReward(_beneficiary) isActive claimOpen nonReentrant returns(uint256){
         uint256 rewardAmount = userRewards[_beneficiary];
@@ -162,4 +219,23 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         hasClaimedRewards[_beneficiary] = true;
         return rewardAmount;
     }
+
+    function _updateReward(uint256 _prevAmount, uint256 _newAmount) private returns(uint256, uint256){
+        require(_newAmount > 0,"Zero Amount Disallowed");
+        (uint256 minRewardCap, uint256 maxRewardCap) = _getRewardAmountByType();
+        if(_prevAmount == minRewardCap){ 
+            minRewardCapPerUser = _newAmount.mul(10 ** tokenDecimals);
+        }else if(_prevAmount == maxRewardCap){
+            maxRewardCapPerUser = _newAmount.mul(10 ** tokenDecimals);
+        }
+        return _getRewardAmountByType();
+    }
+
+    function _getRewardAmountByType() private view returns(uint256, uint256){
+        return (minRewardCapPerUser, maxRewardCapPerUser);
+    }
+
+
+
+
 }
