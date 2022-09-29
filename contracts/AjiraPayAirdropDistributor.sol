@@ -85,12 +85,12 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
-    constructor(IERC20 _token, uint _minRewardCap, uint _maxRewardCap, uint _tokenDecimals){
+    constructor(address _token, uint _minRewardCap, uint _maxRewardCap, uint _tokenDecimals){
         require(_tokenDecimals > 0 && _tokenDecimals <= 18,"Invalid Decimals");
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(MANAGER_ROLE, _msgSender());
         
-        rewardToken = _token;
+        rewardToken = IERC20(_token);
         tokenDecimals = _tokenDecimals;
 
         minRewardCapPerUser = _minRewardCap.mul(10 ** tokenDecimals);
