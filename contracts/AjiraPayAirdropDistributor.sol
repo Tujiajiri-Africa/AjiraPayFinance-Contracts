@@ -25,6 +25,8 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     uint public maxRewardCapPerUser;
     uint public minRewardCapPerUser;
     uint public tokenDecimals;
+    uint public totalRewardsClaimed;
+    uint public totalRewardsToBeClaimed;
 
     address payable public treasury;
 
@@ -44,6 +46,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     event TreasuryUpdated(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
     event MinRewardCapUpdated(address indexed caller, uint indexed prevMinRewardCapPerUser, uint indexed newMinRewardCapPerUser, uint timestamp);
     event MaxRewardCapUpdated(address indexed caller, uint indexed prevMaxRewardCapPerUser, uint indexed newMaxRewardCapPerUser, uint timestamp);
+    event UnclaimedTokensRecovered(address indexed caller, address indexed destinationAddress, uint indexed tokenAmount, uint timestamp);
 
     modifier isActive(){
         require(isAirdropActive == true,"Airdrop not active");
@@ -98,6 +101,8 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         
 
         treasury = payable(_msgSender());
+        totalRewardsClaimed = 0;
+        totalRewardsToBeClaimed = 0;
     }
 
     function activateAirdrop() public onlyRole(MANAGER_ROLE) isNotActive{
@@ -115,6 +120,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         require(_amount < rewardToken.balanceOf(address(this)) && _amount <= maxRewardCapPerUser,"Cap Reached");
         userRewards[_winner] = userRewards[_winner].add(_amount);
         isExistingWinner[_winner] = true;
+        totalRewardsToBeClaimed = totalRewardsToBeClaimed.add(_amount);
         emit NewWinner(_msgSender(), _winner, _amount, block.timestamp);
     }
 
@@ -128,7 +134,8 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         uint256 rewardAfter = userRewards[_winner];
         if(hasClaimedRewards[_winner] == true && rewardAfter >0){
             hasClaimedRewards[_winner] = false;
-        }
+        } 
+        totalRewardsToBeClaimed = totalRewardsToBeClaimed.add(_newRewardAmount);
         emit UserRewardUpdated(_msgSender(), _winner, rewardBefore, rewardAfter, block.timestamp);
     }
 
@@ -154,18 +161,20 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         emit RewardTokenUpdated(_msgSender(), prevRewardToken, rewardToken, block.timestamp);
     }
 
-    function updateMinRewardCap(uint _amount) public onlyRole(MANAGER_ROLE) isNotActive{
-        uint currentMinRewardCap = minRewardCapPerUser;
-        (uint256 minRewardCap, ) = _getRewardAmountByType();
-        (uint256 updatedMinReward, ) = _updateReward(minRewardCap,_amount);
-        emit MinRewardCapUpdated(_msgSender(), currentMinRewardCap, updatedMinReward, block.timestamp);
+    function updateMinRewardCap(uint _amount) public onlyRole(MANAGER_ROLE) isActive{
+        require(_amount > 0,"Invalid Cap Value");
+        (uint256 oldMinRewardCap, ) = _getRewardAmountByType();
+        oldMinRewardCap = _amount.mul(10 ** tokenDecimals);
+        (uint256 updatedMinRewardCap, ) = _getRewardAmountByType();
+        emit MinRewardCapUpdated(_msgSender(), oldMinRewardCap, updatedMinRewardCap, block.timestamp);
     }
 
-    function updateMaxRewardCap(uint _amount) public onlyRole(MANAGER_ROLE) isNotActive{
-        uint currentMaxRewardCap = maxRewardCapPerUser;
-        ( , uint256 maxRewardCap) = _getRewardAmountByType();
-        ( , uint256 updatedMaxreward) = _updateReward(maxRewardCap,_amount);
-        emit MaxRewardCapUpdated(_msgSender(), currentMaxRewardCap, updatedMaxreward, block.timestamp);
+    function updateMaxRewardCap(uint _amount) public onlyRole(MANAGER_ROLE) isActive{
+        require(_amount > 0,"Invalid Cap Value");
+        (, uint256 oldMaxRewardCap) = _getRewardAmountByType();
+        oldMaxRewardCap = _amount.mul(10 ** tokenDecimals);
+        (, uint256 updatedMaxRewardCap) = _getRewardAmountByType();
+        emit MaxRewardCapUpdated(_msgSender(), oldMaxRewardCap, updatedMaxRewardCap, block.timestamp);
     }
 
     function activateClaims() public onlyRole(MANAGER_ROLE) isActive claimClosed{
@@ -179,7 +188,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function getAirdropTotalSupply() public view returns(uint256){
-        return rewardToken.balanceOf(address(this));
+        return _getRewardDistributorBalance();
     }
 
     function cancelUserRewards(address _account) public onlyRole(MANAGER_ROLE) isExistingWinnerAccount(_account) isActive returns(address, uint256){
@@ -204,6 +213,12 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         emit ERC20Recovered(_msgSender(), _account, _amount, token, block.timestamp);
     }
 
+    function recoverUnClaimedTokens() public onlyRole(MANAGER_ROLE) isActive nonReentrant{
+        uint256 amount = _getRewardDistributorBalance();
+        require(rewardToken.transfer(address(rewardToken), amount),"Token Recovery Failed");
+        emit UnclaimedTokensRecovered(_msgSender(), address(rewardToken), amount, block.timestamp);
+    }
+
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury){
         if(payable(_newTreasury) == treasury){ return;}
         address payable prevTreasury = treasury;
@@ -218,6 +233,8 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         require(rewardToken.transfer(_beneficiary,rewardAmountInWei),"Failed to send reward");
         userRewards[_beneficiary] = 0;
         hasClaimedRewards[_beneficiary] = true;
+        totalRewardsToBeClaimed = totalRewardsToBeClaimed.sub(rewardAmount);
+        totalRewardsClaimed = totalRewardsClaimed.add(rewardAmount);
         return rewardAmount;
     }
 
@@ -237,5 +254,9 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
 
     function _getRewardAmountByType() private view returns(uint256, uint256){
         return (minRewardCapPerUser, maxRewardCapPerUser);
+    }
+
+    function _getRewardDistributorBalance() private view returns(uint256){
+        return rewardToken.balanceOf(address(this));
     }
 }
