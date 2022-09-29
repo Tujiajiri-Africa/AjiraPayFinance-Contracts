@@ -56,6 +56,11 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
+    modifier isNotAnExistingWinnerAccount(address _account){
+        require(isExistingWinner[_account] == false,"Acoount is a beneficiary");
+        _;
+    }
+
     modifier hasNotClaimedReward(address _account){
         require(hasClaimedRewards[_account] == false,"Rewards claimed already");
         _;
@@ -91,11 +96,11 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         emit AirdropDeActivated(_msgSender(), rewardToken, block.timestamp);
     }
 
-    function addWinner(address _winner, uint _amount) public nonZeroAddress(_winner) onlyRole(MANAGER_ROLE){
+    function addWinner(address _winner, uint _amount) public nonZeroAddress(_winner) onlyRole(MANAGER_ROLE) isNotAnExistingWinnerAccount(_winner){
         require(_amount > 0,"Amount is zero");
         require(_amount < rewardToken.balanceOf(address(this)) && _amount <= maxRewardCapPerUser,"Cap Reached");
-        if(isExistingWinner[_winner] == false){ isExistingWinner[_winner] = true;}
         userRewards[_winner] = userRewards[_winner].add(_amount);
+        isExistingWinner[_winner] = true;
         emit NewWinner(_msgSender(), _winner, _amount, block.timestamp);
     }
 
