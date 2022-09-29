@@ -7,7 +7,6 @@ import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 
-
 contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -35,6 +34,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     event UserRewardUpdated(address indexed caller, address indexed beneficiary, uint prevRewardAmount, uint indexed newRewardAmount, uint timestamp);
     event ClaimsOpened(address indexed caller, uint indexed timestamp);
     event ClaimsClosed(address indexed caller, uint indexed timestamp);
+    event UserRewardCancelled(address indexed caller, address indexed beneficiary, uint indexed rewardAmount, uint timestamp);
 
     modifier isActive(){
         require(isAirdropActive == true,"Airdrop not active");
@@ -57,7 +57,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     }
 
     modifier isNotAnExistingWinnerAccount(address _account){
-        require(isExistingWinner[_account] == false,"Acoount is a beneficiary");
+        require(isExistingWinner[_account] == false,"Account is a beneficiary");
         _;
     }
 
@@ -145,6 +145,13 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
 
     function getAirdropTotalSupply() public view returns(uint256){
         return rewardToken.balanceOf(address(this));
+    }
+
+    function cancelUserRewards(address _account) public onlyRole(MANAGER_ROLE) isExistingWinnerAccount(_account) isActive returns(address, uint256){
+        isExistingWinner[_account] = false;
+        userRewards[_account] = 0;
+        emit UserRewardCancelled(_msgSender(),_account, userRewards[_account], block.timestamp);
+        return (_account, userRewards[_account]);
     }
 
     //Internal functions
