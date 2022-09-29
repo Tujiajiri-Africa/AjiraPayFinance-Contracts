@@ -81,7 +81,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     }
 
     modifier claimClosed(){
-        require(isClaimOpen == false,"Claim Not Active");
+        require(isClaimOpen == false,"Claim Active");
         _;
     }
 
@@ -214,7 +214,8 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     //Internal functions
     function _performClaim(address _beneficiary) private nonZeroAddress(_beneficiary) isExistingWinnerAccount(_beneficiary) hasNotClaimedReward(_beneficiary) isActive claimOpen nonReentrant returns(uint256){
         uint256 rewardAmount = userRewards[_beneficiary];
-        require(rewardToken.transfer(_beneficiary,rewardAmount),"Failed to send reward");
+        uint256 rewardAmountInWei = rewardAmount.mul(10 ** tokenDecimals);
+        require(rewardToken.transfer(_beneficiary,rewardAmountInWei),"Failed to send reward");
         userRewards[_beneficiary] = 0;
         hasClaimedRewards[_beneficiary] = true;
         return rewardAmount;

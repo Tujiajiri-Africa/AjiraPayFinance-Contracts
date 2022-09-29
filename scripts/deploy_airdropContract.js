@@ -7,14 +7,14 @@
 const hre = require("hardhat");
 
 async function main() {
-  const AjiraPayToken = '0xE9680C408202d0f949C672E0fe304f4A78C9c591';
+  const ajiraPayTokenAddress = '0xE9680C408202d0f949C672E0fe304f4A78C9c591';
   const minRewarCap = 1;
   const maxRewardCap = 1000;
   const tokenDecimals = 18;
   const AjiraPayAirdropDristributor = await hre.ethers.getContractFactory('AjiraPayAirdropDistributor')
-  const ajiraPayAirdropDristributor = await AjiraPayAirdropDristributor.deploy();
+  const ajiraPayAirdropDristributor = await AjiraPayAirdropDristributor.deploy(ajiraPayTokenAddress,minRewarCap,maxRewardCap,tokenDecimals);
 
-  await ajiraPayAirdropDristributor.deployed(AjiraPayToken,minRewarCap,maxRewardCap,tokenDecimals);
+  await ajiraPayAirdropDristributor.deployed();
 
   console.log("Ajira Pay deployed to:", ajiraPayAirdropDristributor.address);
 }
