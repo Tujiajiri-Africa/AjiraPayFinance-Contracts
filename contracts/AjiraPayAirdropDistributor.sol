@@ -92,7 +92,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         
         rewardToken = _token;
         tokenDecimals = _tokenDecimals;
-        
+
         minRewardCapPerUser = _minRewardCap.mul(10 ** tokenDecimals);
         maxRewardCapPerUser = _maxRewardCap.mul(10 ** tokenDecimals);
         
@@ -157,15 +157,15 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     function updateMinRewardCap(uint _amount) public onlyRole(MANAGER_ROLE) isNotActive{
         uint currentMinRewardCap = minRewardCapPerUser;
         (uint256 minRewardCap, ) = _getRewardAmountByType();
-        _updateReward(minRewardCap,_amount);
-        emit MinRewardCapUpdated(_msgSender(), currentMinRewardCap, minRewardCapPerUser, block.timestamp);
+        (uint256 updatedMinReward, ) = _updateReward(minRewardCap,_amount);
+        emit MinRewardCapUpdated(_msgSender(), currentMinRewardCap, updatedMinReward, block.timestamp);
     }
 
     function updateMaxRewardCap(uint _amount) public onlyRole(MANAGER_ROLE) isNotActive{
         uint currentMaxRewardCap = maxRewardCapPerUser;
         ( , uint256 maxRewardCap) = _getRewardAmountByType();
-        _updateReward(maxRewardCap,_amount);
-        emit MaxRewardCapUpdated(_msgSender(), currentMaxRewardCap, maxRewardCapPerUser, block.timestamp);
+        ( , uint256 updatedMaxreward) = _updateReward(maxRewardCap,_amount);
+        emit MaxRewardCapUpdated(_msgSender(), currentMaxRewardCap, updatedMaxreward, block.timestamp);
     }
 
     function activateClaims() public onlyRole(MANAGER_ROLE) isActive claimClosed{
@@ -221,12 +221,15 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function _updateReward(uint256 _prevAmount, uint256 _newAmount) private returns(uint256, uint256){
-        require(_newAmount > 0,"Zero Amount Disallowed");
         (uint256 minRewardCap, uint256 maxRewardCap) = _getRewardAmountByType();
+        require(_newAmount > 0,"Zero Amount Disallowed");
+        require(_prevAmount == minRewardCap || _prevAmount == maxRewardCap,"Unknown Amount");
         if(_prevAmount == minRewardCap){ 
             minRewardCapPerUser = _newAmount.mul(10 ** tokenDecimals);
         }else if(_prevAmount == maxRewardCap){
             maxRewardCapPerUser = _newAmount.mul(10 ** tokenDecimals);
+        }else{
+            revert("Unknown Amount");
         }
         return _getRewardAmountByType();
     }
@@ -234,8 +237,4 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     function _getRewardAmountByType() private view returns(uint256, uint256){
         return (minRewardCapPerUser, maxRewardCapPerUser);
     }
-
-
-
-
 }
