@@ -46,7 +46,8 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     event TreasuryUpdated(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
     event MinRewardCapUpdated(address indexed caller, uint indexed prevMinRewardCapPerUser, uint indexed newMinRewardCapPerUser, uint timestamp);
     event MaxRewardCapUpdated(address indexed caller, uint indexed prevMaxRewardCapPerUser, uint indexed newMaxRewardCapPerUser, uint timestamp);
-    event UnclaimedTokensRecovered(address indexed caller, address indexed destinationAddress, uint indexed tokenAmount, uint timestamp);
+    event UnclaimableTokensRecovered(address indexed caller, address indexed destinationAddress, uint indexed tokenAmount, uint timestamp);
+    event ClaimBackUnClaimedTokens(address indexed caller, address indexed destinationAddress, uint indexed claimedBalance, uint timestamp);
 
     modifier isActive(){
         require(isAirdropActive == true,"Airdrop not active");
@@ -131,11 +132,11 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         require(_newRewardAmount < rewardToken.balanceOf(address(this)) && _newRewardAmount <= maxRewardCapPerUser,"Cap Reached");
         require(totalRewards <= rewardToken.balanceOf(address(this)) && totalRewards <= maxRewardCapPerUser,"Cap Reached");
         userRewards[_winner] = rewardBefore.add(_newRewardAmount);
+        totalRewardsToBeClaimed = totalRewardsToBeClaimed.add(_newRewardAmount);
         uint256 rewardAfter = userRewards[_winner];
         if(hasClaimedRewards[_winner] == true && rewardAfter >0){
             hasClaimedRewards[_winner] = false;
         } 
-        totalRewardsToBeClaimed = totalRewardsToBeClaimed.add(_newRewardAmount);
         emit UserRewardUpdated(_msgSender(), _winner, rewardBefore, rewardAfter, block.timestamp);
     }
 
@@ -213,10 +214,17 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         emit ERC20Recovered(_msgSender(), _account, _amount, token, block.timestamp);
     }
 
-    function recoverUnClaimedTokens() public onlyRole(MANAGER_ROLE) isActive nonReentrant{
+    function recoverTokensNotClaimable() public onlyRole(MANAGER_ROLE) isActive nonReentrant{
         uint256 amount = _getRewardDistributorBalance();
-        require(rewardToken.transfer(address(rewardToken), amount),"Token Recovery Failed");
-        emit UnclaimedTokensRecovered(_msgSender(), address(rewardToken), amount, block.timestamp);
+        uint256 unClaimedTokensBeforeClaims = amount.sub(totalRewardsToBeClaimed).mul(10 ** tokenDecimals);
+        require(rewardToken.transfer(treasury, unClaimedTokensBeforeClaims),"Token Recovery Failed");
+        emit UnclaimableTokensRecovered(_msgSender(), treasury, amount, block.timestamp);
+    }
+
+    function recoverUnclaimedTokens() public onlyRole(MANAGER_ROLE) isActive claimClosed{
+        uint256 unclaimedBalance = _getRewardDistributorBalance();
+        require(rewardToken.transfer(treasury, unclaimedBalance),"Total Claims Failed");
+        emit ClaimBackUnClaimedTokens(_msgSender(), treasury, unclaimedBalance, block.timestamp);
     }
 
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury){
@@ -236,20 +244,6 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         totalRewardsToBeClaimed = totalRewardsToBeClaimed.sub(rewardAmount);
         totalRewardsClaimed = totalRewardsClaimed.add(rewardAmount);
         return rewardAmount;
-    }
-
-    function _updateReward(uint256 _prevAmount, uint256 _newAmount) private returns(uint256, uint256){
-        (uint256 minRewardCap, uint256 maxRewardCap) = _getRewardAmountByType();
-        require(_newAmount > 0,"Zero Amount Disallowed");
-        require(_prevAmount == minRewardCap || _prevAmount == maxRewardCap,"Unknown Amount");
-        if(_prevAmount == minRewardCap){ 
-            minRewardCapPerUser = _newAmount.mul(10 ** tokenDecimals);
-        }else if(_prevAmount == maxRewardCap){
-            maxRewardCapPerUser = _newAmount.mul(10 ** tokenDecimals);
-        }else{
-            revert("Unknown Amount");
-        }
-        return _getRewardAmountByType();
     }
 
     function _getRewardAmountByType() private view returns(uint256, uint256){
