@@ -28,6 +28,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public minTokensToPurchasePerWallet;
     uint public maxTokensToPurchasePerWallet;
     uint public presaleDurationInSec;
+    
+    uint private minUsdValuePerTokenDiviser = 400;
+    uint public minUSDPricePerTokenFactor = 10000;
+    uint public minUSDPricePerToken = minUsdValuePerTokenDiviser.div(minUSDPricePerTokenFactor);
 
     mapping(address => uint) public totalTokenContributionsByUser;
     mapping(address => uint) public totalTokenContributionsClaimedByUser;
@@ -114,7 +118,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
-        
+
     }
 
     function contribute() public payable nonReentrant{
@@ -129,8 +133,12 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         treasury.transfer(address(this).balance);
     }
 
-    function recoverLostTokensForInvestor(address _account, uint _amount) public nonReentrant{
-
+    function recoverLostTokensForInvestor(address _token, address _account, uint _amount) public 
+    nonReentrant nonZeroAddress(_token) nonZeroAddress(_account){
+        IERC20 token = IERC20(_token);
+        require(token != ajiraPayToken,"Invalid Token");
+        token.safeTransfer(_account, _amount);
+        emit ERC20TokenRecovered(_msgSender(), _account, _amount, block.timestamp);
     }
 
     function claimRefund() public nonReentrant{
