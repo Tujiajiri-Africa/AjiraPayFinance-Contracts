@@ -118,7 +118,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
-
+        if(treasury == _newTreasury) return;
+        address payable prevTreasury = treasury;
+        treasury = payable(_newTreasury);
+        emit TreasuryUpdated(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
 
     function contribute() public payable nonReentrant{
@@ -164,7 +167,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function _forwardFunds() private{
-
+        treasury.transfer(msg.value);
     }
 
     function _refundUnsoldTokens() private{
