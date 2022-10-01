@@ -7,7 +7,7 @@ import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 
-contract AjiraPayFinancePrivateSale is Ownable, AccessControl{
+contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -19,6 +19,14 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl{
 
     bool public isPresaleOpen = false;
     bool public isPresalePaused = false;
+
+    uint public totalBNBraised;
+    uint public minTokensToPurchasePerWallet;
+    uint public maxTokensToPurchasePerWallet;
+
+    mapping(address => uint) public totalTokenContributionsByUser;
+    mapping(address => uint) public totalTokenContributionsClaimedByUser;
+    mapping(address => uint) public totalUnclaimedTokenContributionsByUser;
 
     modifier saleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
@@ -58,11 +66,31 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl{
 
     }
 
-    function contribute() public payable{
+    function contribute() public payable nonReentrant{
 
     }
 
-    function claimContribution() public{
+    function claimContribution() public nonReentrant{
+
+    }
+
+    receive() external payable{
+        contribute();
+    }
+
+    function startPresale() public onlyRole(MANAGER_ROLE){
+
+    }
+
+    function closePresale() public onlyRole(MANAGER_ROLE){
+
+    }
+
+    function recoverBNB() public onlyRole(MANAGER_ROLE) nonReentrant{
+        treasury.transfer(address(this).balance);
+    }
+
+    function recoverLostTokensForInvestor(address _account, uint _amount) public nonReentrant{
 
     }
 }
