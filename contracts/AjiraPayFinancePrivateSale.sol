@@ -27,11 +27,13 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalBNBraised;
     uint public minTokensToPurchasePerWallet;
     uint public maxTokensToPurchasePerWallet;
+    uint public presaleDurationInSec;
 
     mapping(address => uint) public totalTokenContributionsByUser;
     mapping(address => uint) public totalTokenContributionsClaimedByUser;
     mapping(address => uint) public totalUnclaimedTokenContributionsByUser;
     mapping(address => uint) public totalBNBInvestmentsByIUser;
+    mapping(address => bool) public hasClaimedRefund;
 
     event PresaleOpened(address indexed caller, uint indexed timestamp);
     event PresaleClosed(address indexed caller, uint indexed timestamp);
@@ -70,7 +72,17 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
-    constructor(address _token){
+    modifier isEligibleForRefund(address contributor){
+        require(hasClaimedRefund[contributor] == false,"Not eligible");
+        _;
+    }
+
+    modifier isNotEligibleForRefund(address contributor){
+        require(hasClaimedRefund[contributor] == true,"Refund Claimed Already");
+        _;
+    }
+
+    constructor(address _token, uint _presaleDurationInSec){
         require(_token != address(0),"Invalid Address");
         _grantRole(MANAGER_ROLE, _msgSender());
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -78,10 +90,31 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         ajiraPayToken = IERC20(_token); 
         treasury = payable(_msgSender());
         priceFeed = AggregatorV3Interface(CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS);
+        presaleDurationInSec = _presaleDurationInSec;
+    }
+
+    function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
+        isPresaleOpen = true;
+        emit PresaleOpened(_msgSender(), block.timestamp);
+    }
+
+    function closePresale() public onlyRole(MANAGER_ROLE) presaleOpen{
+        isPresaleOpen = false;
+        emit PresaleClosed(_msgSender(), block.timestamp);
+    }
+
+    function pausePresale() public onlyRole(MANAGER_ROLE) presaleUnpaused{
+        isPresalePaused = true;
+        emit PresalePaused(_msgSender(), block.timestamp);
+    }
+
+    function unpausePresale() public onlyRole(MANAGER_ROLE) presalePaused{
+        isPresalePaused = false;
+        emit PresaleUnpaused(_msgSender(), block.timestamp);
     }
 
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
-
+        
     }
 
     function contribute() public payable nonReentrant{
@@ -89,22 +122,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function claimContribution() public nonReentrant{
-
-    }
-
-    function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
-
-    }
-
-    function closePresale() public onlyRole(MANAGER_ROLE) presaleOpen{
-
-    }
-
-    function pausePresale() public onlyRole(MANAGER_ROLE) presaleUnpaused{
-
-    }
-
-    function unpausePresale() public onlyRole(MANAGER_ROLE) presalePaused{
 
     }
 
@@ -116,10 +133,18 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     }
 
-    function claimRefund() public{
+    function claimRefund() public nonReentrant{
 
     }
-    
+
+    function getContractTokenBalance() public view returns(uint256){
+        return ajiraPayToken.balanceOf(address(this));
+    }
+
+    function getContractBNBBalance() public view returns(uint256){
+        return address(this).balance;
+    }
+
     receive() external payable{
         contribute();
     }
@@ -130,7 +155,11 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         return price;
     }
 
-    function forwardFunds() private{
+    function _forwardFunds() private{
+
+    }
+
+    function _refundUnsoldTokens() private{
 
     }
 }
