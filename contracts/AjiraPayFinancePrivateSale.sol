@@ -6,6 +6,7 @@ import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     using SafeMath for uint256;
@@ -15,7 +16,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     IERC20 public ajiraPayToken;
 
+    AggregatorV3Interface internal priceFeed;
+
     address payable public treasury;
+    address private immutable CHAINLINK_BNB_USD_PRICEFEED_ADDRESS = 0x14e613AC84a31f709eadbdF89C6CC390fDc9540A;
 
     bool public isPresaleOpen = false;
     bool public isPresalePaused = false;
@@ -27,8 +31,20 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     mapping(address => uint) public totalTokenContributionsByUser;
     mapping(address => uint) public totalTokenContributionsClaimedByUser;
     mapping(address => uint) public totalUnclaimedTokenContributionsByUser;
+    mapping(address => uint) public totalBNBInvestmentsByIUser;
 
-    //if 1 token = 0.05
+    event PresaleOpened(address indexed caller, uint indexed timestamp);
+    event PresaleClosed(address indexed caller, uint indexed timestamp);
+    event PresalePaused(address indexed caller, uint indexed timestamp);
+    event PresaleUnpaused(address indexed caller, uint indexed timestamp);
+    event Contribute(address indexed beneficiary, uint indexed weiAmount, uint indexed tokenAmountBought, uint timestamp);
+    event ClaimContribution(address indexed beneficiary, uint indexed tokenAmountReceived, uint indexed timestamp);
+    event TreasuryUpdated(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
+    event BNBRecovered(address indexed caller, address indexed destinationWallet, uint indexed amount, uint timestamp);
+    event ERC20TokenRecovered(address indexed caller, address indexed destination, uint amount, uint timestamp);
+
+    //if 1 token = 0.05$
+    //run presale for 1 month
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
         _;
@@ -61,6 +77,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
         ajiraPayToken = IERC20(_token); 
         treasury = payable(_msgSender());
+        priceFeed = AggregatorV3Interface(CHAINLINK_BNB_USD_PRICEFEED_ADDRESS);
     }
 
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
@@ -101,5 +118,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function recoverLostTokensForInvestor(address _account, uint _amount) public nonReentrant{
 
+    }
+
+    function _getBNBPriceInUSD() private view returns(int256){
+        (, int256 price, , , ) = priceFeed.latestRoundData();
+        return price;
     }
 }
