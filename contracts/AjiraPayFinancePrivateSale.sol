@@ -28,12 +28,13 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     mapping(address => uint) public totalTokenContributionsClaimedByUser;
     mapping(address => uint) public totalUnclaimedTokenContributionsByUser;
 
-    modifier saleOpen(){
+    //if 1 token = 0.05
+    modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
         _;
     }
 
-    modifier saleClosed(){
+    modifier presaleClosed(){
         require(isPresaleOpen == false,"Sale Open");
         _;
     }
@@ -43,7 +44,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
-    modifier presaleNotPaused(){
+    modifier presaleUnpaused(){
         require(isPresalePaused == false,"Presale Paused");
         _;
     }
@@ -78,11 +79,19 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         contribute();
     }
 
-    function startPresale() public onlyRole(MANAGER_ROLE){
+    function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
 
     }
 
-    function closePresale() public onlyRole(MANAGER_ROLE){
+    function closePresale() public onlyRole(MANAGER_ROLE) presaleOpen{
+
+    }
+
+    function pausePresale() public onlyRole(MANAGER_ROLE) presaleUnpaused{
+
+    }
+
+    function unpausePresale() public onlyRole(MANAGER_ROLE) presalePaused{
 
     }
 
