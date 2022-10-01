@@ -19,7 +19,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     AggregatorV3Interface internal priceFeed;
 
     address payable public treasury;
-    address private immutable CHAINLINK_BNB_USD_PRICEFEED_ADDRESS = 0x14e613AC84a31f709eadbdF89C6CC390fDc9540A;
+    address private immutable CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS = 0x14e613AC84a31f709eadbdF89C6CC390fDc9540A;
 
     bool public isPresaleOpen = false;
     bool public isPresalePaused = false;
@@ -77,7 +77,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
         ajiraPayToken = IERC20(_token); 
         treasury = payable(_msgSender());
-        priceFeed = AggregatorV3Interface(CHAINLINK_BNB_USD_PRICEFEED_ADDRESS);
+        priceFeed = AggregatorV3Interface(CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS);
     }
 
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
@@ -90,10 +90,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function claimContribution() public nonReentrant{
 
-    }
-
-    receive() external payable{
-        contribute();
     }
 
     function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
@@ -120,8 +116,21 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     }
 
-    function _getBNBPriceInUSD() private view returns(int256){
+    function claimRefund() public{
+
+    }
+    
+    receive() external payable{
+        contribute();
+    }
+
+    //INTERNAL HELPER FUNCTIONS
+    function _getLatestBNBPriceInUSD() private view returns(int256){
         (, int256 price, , , ) = priceFeed.latestRoundData();
         return price;
+    }
+
+    function forwardFunds() private{
+
     }
 }
