@@ -217,15 +217,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     bool public swapAndLiquifyEnabled = true;
     bool public isInTaxHoliday = false;
 
-    mapping(address => bool) public _isExcludedFromFee;
+    mapping(address => bool) private _isExcludedFromFee;
     mapping(address => bool) private _isExcludedFromMaxTx;
 
     uint256 public _buyFee;
     uint256 public _sellFee;
-
-    uint256 private devTreasuryPercent;
-    uint256 private marketingTreasuryPercent;
-    uint256 private liquidityTreasuryPercent;
 
     uint256 public minLiquidityAmount; 
     uint256 public liquidityFee;
@@ -268,6 +264,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     constructor(address _router, address _treasury) ERC20(_name, _symbol){
         require(_router != address(0),"Invalid Address");
         require(_treasury != address(0),"Invalid Address");
+
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(MANAGER_ROLE, _msgSender());
 
@@ -289,8 +286,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         _isExcludedFromMaxTx[treasury] = true;
 
         _buyFee = 2;
-        _sellFee = 8;
-        txFee = 1;
+        _sellFee = 5;
+        txFee = 2;
         liquidityFee = 1;
 
         minLiquidityAmount = _totalSupply.div(1000).div(4); //50_000

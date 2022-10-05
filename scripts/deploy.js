@@ -18,9 +18,10 @@ async function main() {
 
   const pancakeswapTestnetRouter = '0x6725F303b657a9451d8BA641348b6761A6CC7a17';
   const pancakeswapMainnetRouter = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
+  const ajiraPayTreasury = '0x4F6c0B945D00f55B6D5a7cEd1eCAA0690675527A';
 
   const AjiraPayFinanceToken = await hre.ethers.getContractFactory('AjiraPayFinanceToken')
-  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy()
+  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy(pancakeswapTestnetRouter, ajiraPayTreasury);
 
   await ajiraPayFinanceToken.deployed();
 
