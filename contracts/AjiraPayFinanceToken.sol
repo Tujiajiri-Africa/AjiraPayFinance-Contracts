@@ -207,8 +207,6 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     string private _symbol = 'AJP';
 
     address payable public treasury;
-    address payable public marketingTreasury;
-    address payable public devTreasury;
 
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
@@ -217,6 +215,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
 
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
+    bool public isInTaxHoliday = false;
 
     mapping(address => bool) public _isExcludedFromFee;
     mapping(address => bool) private _isExcludedFromMaxTx;
@@ -241,6 +240,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     event SwapAndLiquifyEnabledUpdated(bool enabled);
     event RouterUpdated(address indexed caller, address indexed prevRouter, address indexed newRouter, uint timestamp);
     event SwapAndLiquify(uint256 tokensSwapped,uint256 ethReceived,uint256 tokensIntoLiqudity);
+    event MaxTransactionUpdated(address indexed caller, uint256 indexed prevAmount, uint256 indexed newAmount, uint timestamp);
+    event TaxHolidayActivated(address indexed caller, uint indexed timestamp);
+    event TaxHolidayDeactivated(address indexed caller, uint indexed timestamp);
 
     modifier lockTheSwap {
         inSwapAndLiquify = true;
@@ -253,14 +255,25 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         _;
     }
 
-    constructor(address router) ERC20(_name, _symbol){
-        require(router != address(0),"Invalid Address");
+    modifier isInActiveTaxHoliday(){
+        require(isInTaxHoliday == true,"Tax Holiday Inactive");
+        _;
+    }
+
+    modifier isNotInActiveTaxHoliday(){
+        require(isInTaxHoliday == false,"Tax Holiday Active");
+        _;
+    }
+
+    constructor(address _router, address _treasury) ERC20(_name, _symbol){
+        require(_router != address(0),"Invalid Address");
+        require(_treasury != address(0),"Invalid Address");
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(MANAGER_ROLE, _msgSender());
 
-        treasury = payable(_msgSender());
+        treasury = payable(_treasury);
 
-        IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(router);
+        IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(
             address(this), 
             _pancakeSwapV2Router.WETH());
@@ -280,12 +293,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         txFee = 1;
         liquidityFee = 1;
 
-        devTreasuryPercent = 40;
-        marketingTreasuryPercent = 50;
-        liquidityTreasuryPercent = 10;
+        minLiquidityAmount = _totalSupply.div(1000).div(4); //50_000
+        maxTransactionAmount = _totalSupply.div(200); //1000_000
 
-        minLiquidityAmount = _totalSupply.div(1000).div(4);
         _mint(_msgSender(), _totalSupply);
+        
     }
 
     function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1363, AccessControl) returns (bool) {
@@ -358,8 +370,26 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         emit SwapAndLiquifyEnabledUpdated(true);
     }
 
-    function excludeFromMaxTransaction(address _beneficiary) public onlyRole(MANAGER_ROLE) notExcludedFromMaxTx(_beneficiary){
+    function excludeFromMaxTransaction(address _beneficiary) public onlyRole(MANAGER_ROLE){
         _isExcludedFromMaxTx[_beneficiary] = true;
+    }
+
+    function setMaxTransactionAmount(uint _amount) public onlyRole(MANAGER_ROLE){
+        require(_amount != 0,"Zero Amt");
+        require(_amount < _totalSupply.div(100));
+        uint256 prevAmount = maxTransactionAmount;
+        maxTransactionAmount = _amount;
+        emit MaxTransactionUpdated(_msgSender(), prevAmount, _amount, block.timestamp);
+    }
+
+    function activateTaxHoliday() public onlyRole(MANAGER_ROLE) isNotInActiveTaxHoliday{
+        isInTaxHoliday = true;
+        emit TaxHolidayActivated(_msgSender(), block.timestamp);
+    }
+        
+    function deActivateTaxHoliday() public onlyRole(MANAGER_ROLE) isInActiveTaxHoliday{
+        isInTaxHoliday = false;
+        emit TaxHolidayDeactivated(_msgSender(), block.timestamp);
     }
 
     receive() external payable {}
@@ -368,15 +398,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     function _transfer(address _sender, address _recipient, uint _amount) internal virtual override {
         require(_sender != address(0), "Invalid Address");
         require(_recipient != address(0), "Invalid Address");
+        _validateAmount(_sender, _recipient, _amount);
 
         uint256 senderBalance = balanceOf(_sender);
 
         require(senderBalance >= _amount, "insufficient Balance");
-        if(_amount > maxTransactionAmount){
-            if(!_isExcludedFromMaxTx[_sender] || !_isExcludedFromMaxTx[_recipient]){
-                require(_amount <= maxTransactionAmount,"Max Transaction Amount Exceeded");
-            }
-        }
 
         uint256 contractTokenBalance = balanceOf(address(this));
 
@@ -390,8 +416,12 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
                 contractTokenBalance = minLiquidityAmount;
                 _swapAndLiquify(contractTokenBalance);
             }
+
             bool takeFee = true;
-            if(_isExcludedFromFee[_sender] || _isExcludedFromFee[_recipient]){takeFee = false;}
+            _isExcludedFromFee[_sender] == true ? takeFee = false : takeFee = true;
+            _isExcludedFromFee[_recipient] == true ? takeFee = false : takeFee = true;
+            isInTaxHoliday == true ? takeFee = false: takeFee = true;
+
             _transferStandard(_sender,_recipient,_amount,takeFee); 
     }
 
@@ -403,9 +433,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         uint256 amountReceived = (takeFee) ? _takeTaxes(_sender, _recipient, _amount) : _amount;
         recipientBalance = recipientBalance.add(amountReceived);
 
-        (,uint256 txFeeAmount,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
-        _takeLiquidity(liquidityFeeAmount);
-        _takeFee(txFeeAmount);
+        if(isInTaxHoliday == false){
+            (,uint256 txFeeAmount,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
+            _takeLiquidity(liquidityFeeAmount);
+            _takeFee(txFeeAmount);
+        }
 
         emit Transfer(_sender, _recipient, amountReceived);
         return true;
@@ -420,16 +452,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
 
       uint256 newBalance = address(this).balance.sub(initialBalance);
 
-      uint256 totalTreasuryBal = devTreasuryPercent.add(marketingTreasuryPercent).add(liquidityTreasuryPercent);
-      uint256 devTreasuryBal = newBalance.div(totalTreasuryBal).mul(devTreasuryPercent);
-      uint256 marketingTreasuryBal = newBalance.div(totalTreasuryBal).mul(marketingTreasuryPercent);
-      uint256 liquidityTreasuryBal = newBalance.div(totalTreasuryBal).mul(liquidityTreasuryPercent);
-
-      _sendFeeToTreasury(marketingTreasury, marketingTreasuryBal);
-      _sendFeeToTreasury(devTreasury, devTreasuryBal);
-      
-      _addLiquidity(otherHalf, liquidityTreasuryBal);
-      emit SwapAndLiquify(half, newBalance, otherHalf);
+      uint256 halfBalance = newBalance.div(2);
+      _sendFeeToTreasury(treasury, halfBalance);
+      uint256 remainingBalance = newBalance.sub(halfBalance);      
+      _addLiquidity(otherHalf, remainingBalance);
+      emit SwapAndLiquify(half, remainingBalance, otherHalf);
     }
 
     function _swapTokensForBnb(uint256 _tokenAmount) private {
@@ -492,7 +519,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
             currentFee = _sellFee;
         } else {
             currentFee = txFee;
-            }
+        }
 
         uint256 feeAmount = amount.mul(currentFee).div(10000);
         contractBalance = contractBalance.add(feeAmount);
@@ -502,5 +529,13 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
 
     function _sendFeeToTreasury(address _treasury, uint256 _amount) private{
         payable(_treasury).transfer(_amount);
+    }
+
+    function _validateAmount(address _sender, address _recipient, uint256 _amount) private view{
+        if(_amount > maxTransactionAmount){
+            if(_isExcludedFromMaxTx[_sender] == false || _isExcludedFromMaxTx[_recipient] == false){
+                require(_amount <= maxTransactionAmount,"Max Tx Exceeded");
+            }
+        }
     }
 }

@@ -26,7 +26,13 @@ contract AjiraPay is ERC165,IERC1363,AjiraPayWhiteList{
 
     address private pancakeswapTestnetRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
     address private pancakeswapMainnetRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+      //uint256 totalTreasuryBal = devTreasuryPercent.add(marketingTreasuryPercent).add(liquidityTreasuryPercent);
+      //uint256 devTreasuryBal = newBalance.div(totalTreasuryBal).mul(devTreasuryPercent);
+      //uint256 marketingTreasuryBal = newBalance.div(totalTreasuryBal).mul(marketingTreasuryPercent);
+      //uint256 liquidityTreasuryBal = newBalance.div(totalTreasuryBal).mul(liquidityTreasuryPercent);
 
+     // _sendFeeToTreasury(marketingTreasury, marketingTreasuryBal);
+      //_sendFeeToTreasury(devTreasury, devTreasuryBal);
     IPancakeRouter02 public pancakeswapV2Router;
     address public pancakeswapV2Pair;
 
