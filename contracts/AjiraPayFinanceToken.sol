@@ -216,25 +216,39 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
 
-    mapping (address => bool) private _isExcludedFromFee;
-    mapping (address => bool) private _isExcluded;
+    mapping(address => bool) private _isExcludedFromFee;
+    mapping(address => bool) private _isExcluded;
+
+    mapping(address => bool) private _isExcludedFromAntibot;
+    mapping(address => bool) private _isExcludedFromMaxTransaction;
+
+    mapping(address => uint256) private nextUserTradeTimestamp;
+    mapping(address => uint256) private lastUserTradeTimeStamp;
 
     address[] private _excluded;
 
-    uint256 private _buyFee;
-    uint256 private _sellFee;
+    uint256 public _buyFee;
+    uint256 public _sellFee;
 
-    uint256 internal minLiquidityAmount; 
-    uint256 private liquidityFee;
+    uint256 public devTreasuryPercent;
+    uint public marketingTreasuryPercent;
+
+    uint256 public minLiquidityAmount; 
+    uint256 public liquidityFee;
     uint256 private previousLiquidityFee = liquidityFee;
-    uint256 private txFee;
+    uint256 public txFee;
     uint256 private previousTaxFee = txFee;
     uint256 private constant MAX = ~uint256(0);
+    uint256 private maxFactor = 1000;
+
+    uint256 public maxTransactionAmount;
+
 
     event ERC20TokenRecovered(address indexed caller, address indexed recepient, uint indexed amount, uint timestamp);
     event TreasuryUpdated(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
     event MinTokensBeforeSwapUpdated(uint256 minTokensBeforeSwap);
     event SwapAndLiquifyEnabledUpdated(bool enabled);
+    event RouterUpdated(address indexed caller, address indexed prevRouter, address indexed newRouter, uint timestamp);
     event SwapAndLiquify(
         uint256 tokensSwapped,
         uint256 ethReceived,
@@ -254,16 +268,36 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         
         treasury = payable(_msgSender());
 
-        IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(router);
-        pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(
-            address(this), 
-            _pancakeSwapV2Router.WETH());
+        // IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(router);
+        // pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(
+        //     address(this), 
+        //     _pancakeSwapV2Router.WETH());
 
-        pancakeswapV2Router = _pancakeSwapV2Router;
+        // pancakeswapV2Router = _pancakeSwapV2Router;
 
-        _isExcludedFromFee[msg.sender] = true;
+        _isExcludedFromFee[_msgSender()] = true;
         _isExcludedFromFee[address(this)] = true;
+        _isExcludedFromFee[treasury] = true;
 
+        _isExcludedFromAntibot[_msgSender()] = true;
+        _isExcludedFromAntibot[address(this)] = true;
+        _isExcludedFromAntibot[treasury] = true;
+        _isExcludedFromAntibot[pancakeswapV2Pair] = true;
+
+        _isExcludedFromMaxTransaction[_msgSender()] = true;
+        _isExcludedFromMaxTransaction[address(this)] = true;
+        _isExcludedFromMaxTransaction[treasury] = true;
+        _isExcludedFromMaxTransaction[pancakeswapV2Pair] = true;
+
+        _buyFee = 2;
+        _sellFee = 8;
+        txFee = 1;
+        liquidityFee = 1;
+
+        devTreasuryPercent = 1;
+        marketingTreasuryPercent = 2;
+ 
+        minLiquidityAmount = _totalSupply.div(maxFactor).div(4);
         _mint(_msgSender(), _totalSupply);
     }
 
@@ -298,6 +332,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         if(treasury == payable(_newTreasury)) return;
         address payable prevTreasury = treasury;
         treasury = payable(_newTreasury);
+        _isExcludedFromFee[treasury] = true;
+        _isExcludedFromAntibot[treasury] = true;
+        _isExcludedFromMaxTransaction[treasury] = true;
         emit TreasuryUpdated(msg.sender, prevTreasury, _newTreasury, block.timestamp);
     }
 
@@ -305,15 +342,59 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         return address(this).balance;
     }
 
+    function updateRouterAddress(address _newRouter) external onlyRole(MANAGER_ROLE) {
+        require(_newRouter != address(0),"Invalid Router Address");
+        IPancakeRouter02 prevRouter = pancakeswapV2Router;
+        IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(_newRouter);
+        pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(address(this), _pancakeSwapV2Router.WETH()); 
+        pancakeswapV2Router = _pancakeSwapV2Router;
+        emit RouterUpdated(_msgSender(), address(prevRouter), _newRouter, block.timestamp);
+    }
+
+    function setTxFeePercentage(uint256 _txFee) external onlyRole(MANAGER_ROLE) {
+        require(_txFee != 0,"Fee cannot be zero");
+        txFee = _txFee;
+    }
+
+    function setLiquidityFeePercentage(uint256 _liquidityFee) external onlyRole(MANAGER_ROLE) {
+        require(_liquidityFee != 0,"Fee cannot be zero");
+        liquidityFee = _liquidityFee;
+    }
+
+    function setBuyFeePercentage(uint256 _fee) external onlyRole(MANAGER_ROLE){
+        require(_fee != 0,"Fee cannot be zero");
+        _buyFee = _fee;
+    }
+
+    function setSellFeePercentage(uint256 _fee) external onlyRole(MANAGER_ROLE){
+        require(_fee != 0,"Fee cannot be zero");
+        _sellFee = _fee;
+    }
+
+    function setSwapAndLiquifyEnabled() public onlyRole(MANAGER_ROLE)   { //swapIsNotEnabled //TODO add this modifier
+        swapAndLiquifyEnabled = true;
+        emit SwapAndLiquifyEnabledUpdated(true);
+    }
+
     receive() external payable {}
 
+    //********************************** INTERNAL HELPER FUNCTIONS *********************************** */
     function _transfer(address _sender, address _recipient, uint _amount) internal virtual override {
-        require(_sender != address(0), "BEP2E: transfer from the zero address");
-        require(_recipient != address(0), "BEP2E: transfer to the zero address");
+        require(_sender != address(0), "transfer from the zero address");
+        require(_recipient != address(0), "transfer to the zero address");
 
         uint256 senderBalance = balanceOf(_sender);
-
-        require(senderBalance >= _amount, "BEP2E: transfer amount exceeds balance");
+        require(senderBalance >= _amount, "transfer amount exceeds balance");
+        
+        if(!_isExcludedFromMaxTransaction[_sender] || !_isExcludedFromMaxTransaction[_recipient]){
+            require(_amount <= maxTransactionAmount,"Max Transaction Amount Exceeded");
+        }
+        if(!_isExcludedFromAntibot[_sender]){
+            require(block.timestamp <= nextUserTradeTimestamp[_sender], "Wait for a minute before trading");
+        }
+        if(!_isExcludedFromAntibot[_recipient]){
+            require(block.timestamp <= nextUserTradeTimestamp[_recipient], "Wait for a minute before trading");
+        }
         
         uint256 contractTokenBalance = balanceOf(address(this));
 
@@ -335,7 +416,6 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
             }
 
             _transferStandard(_sender,_recipient,_amount,takeFee); 
-      
     }
 
     function _transferStandard(address _sender, address _recipient, uint256 _amount, bool takeFee) private returns(bool success){
@@ -349,6 +429,16 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         (,uint256 txFeeAmount,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
         _takeLiquidity(liquidityFeeAmount);
         _takeFee(txFeeAmount);
+
+        if(!_isExcludedFromAntibot[_sender]){
+            nextUserTradeTimestamp[_sender] = block.timestamp.add(1 minutes);
+        }else if(!_isExcludedFromAntibot[_recipient]){
+            nextUserTradeTimestamp[_recipient] = block.timestamp.add(1 minutes);
+        }else{
+            nextUserTradeTimestamp[_sender] = block.timestamp;
+            nextUserTradeTimestamp[_recipient] = block.timestamp;
+        }
+
         emit Transfer(_sender, _recipient, amountReceived);
         return true;
     }
@@ -359,6 +449,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
       uint256 initialBalance = address(this).balance;
       _swapTokensForBnb(half); 
       uint256 newBalance = address(this).balance.sub(initialBalance);
+      //TODO send BNB to dev and marketing wallets
       _addLiquidity(otherHalf, newBalance);
       emit SwapAndLiquify(half, newBalance, otherHalf);
     }
@@ -435,5 +526,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         emit Transfer(from, address(this), feeAmount);
 
         return amount.sub(feeAmount);
+    }
+
+    function _sendFeeToTreasury(address _treasury, uint256 _amount) private{
+        payable(_treasury).transfer(_amount);
     }
 }
