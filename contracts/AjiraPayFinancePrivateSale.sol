@@ -27,7 +27,11 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalBNBraised;
     uint public minTokensToPurchasePerWallet;
     uint public maxTokensToPurchasePerWallet;
+    uint public maxBNBPerContributor = 30;
+    uint public minBNBPerUser = 10;
     uint public presaleDurationInSec;
+
+    uint public coolDown = (60 * 60 );
     
     uint private minUsdValuePerTokenDiviser = 400;
     uint public minUSDPricePerTokenFactor = 10000;
@@ -38,6 +42,8 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     mapping(address => uint) public totalUnclaimedTokenContributionsByUser;
     mapping(address => uint) public totalBNBInvestmentsByIUser;
     mapping(address => bool) public hasClaimedRefund;
+
+    mapping(address => uint) public lastUserBuyTimeInSec; //store user's cooldown time to 1 minute
 
     event PresaleOpened(address indexed caller, uint indexed timestamp);
     event PresaleClosed(address indexed caller, uint indexed timestamp);
@@ -125,7 +131,22 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function contribute() public payable nonReentrant{
+        //get user amount via msg.value
+        //check that this value is equal to or greator than the minimum BNB contribution
+        //check that this value is greator than or equal to the maximum BNB contribution per wallet
+        //create a locked timelock for this user
+        //update user contrinutions, both total BNB & token contributions
+        //update total BNB waised
+        //update total tokens sold
+        //send BNB to treasury wallet
+        //send BNB to the time locked wallet
+        //emit event
+        //send BNB to the time locked wallet
 
+        uint256 amount = msg.value;
+        require(amount > 0, "No Amount Specified");
+        require(totalBNBInvestmentsByIUser[_msgSender()].add(amount) <= 1,"Max User Cap Reached");
+        require(msg.value.add(1) <= minUSDPricePerToken,"Minimum Contribution");
     }
 
     function claimContribution() public nonReentrant{
