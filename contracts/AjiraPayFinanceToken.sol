@@ -218,8 +218,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
 
-    mapping(address => bool) private _isExcludedFromFee;
-    mapping(address => bool) private _isExcluded;
+    mapping(address => bool) public _isExcludedFromFee;
+    mapping(address => bool) private _isExcludedFromMaxTx;
 
     uint256 public _buyFee;
     uint256 public _sellFee;
@@ -248,6 +248,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         inSwapAndLiquify = false;
     }
 
+    modifier notExcludedFromMaxTx(address _account){
+        require(_isExcludedFromMaxTx[_account] == false,"Account Excluded");
+        _;
+    }
+
     constructor(address router) ERC20(_name, _symbol){
         require(router != address(0),"Invalid Address");
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -265,6 +270,10 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         _isExcludedFromFee[_msgSender()] = true;
         _isExcludedFromFee[address(this)] = true;
         _isExcludedFromFee[treasury] = true;
+        
+        _isExcludedFromMaxTx[_msgSender()] = true;
+        _isExcludedFromMaxTx[address(this)] = true;
+        _isExcludedFromMaxTx[treasury] = true;
 
         _buyFee = 2;
         _sellFee = 8;
@@ -349,6 +358,10 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         emit SwapAndLiquifyEnabledUpdated(true);
     }
 
+    function excludeFromMaxTransaction(address _beneficiary) public onlyRole(MANAGER_ROLE) notExcludedFromMaxTx(_beneficiary){
+        _isExcludedFromMaxTx[_beneficiary] = true;
+    }
+
     receive() external payable {}
 
     //********************************** INTERNAL HELPER FUNCTIONS *********************************** */
@@ -359,6 +372,12 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         uint256 senderBalance = balanceOf(_sender);
 
         require(senderBalance >= _amount, "insufficient Balance");
+        if(_amount > maxTransactionAmount){
+            if(!_isExcludedFromMaxTx[_sender] || !_isExcludedFromMaxTx[_recipient]){
+                require(_amount <= maxTransactionAmount,"Max Transaction Amount Exceeded");
+            }
+        }
+
         uint256 contractTokenBalance = balanceOf(address(this));
 
         bool overMinTokenBalance = contractTokenBalance >= minLiquidityAmount;
