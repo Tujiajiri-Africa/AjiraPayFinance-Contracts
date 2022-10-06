@@ -21,9 +21,13 @@ async function main() {
   const ajiraPayTreasury = '0x4F6c0B945D00f55B6D5a7cEd1eCAA0690675527A';
 
   const AjiraPayFinanceToken = await hre.ethers.getContractFactory('AjiraPayFinanceToken')
-  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy(pancakeswapTestnetRouter, ajiraPayTreasury);
+  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy(pancakeswapMainnetRouter, ajiraPayTreasury);
+
+  ajiraPayFinanceToken.wait();
 
   await ajiraPayFinanceToken.deployed();
+  //await ajiraPayFinanceToken.initDex(pancakeswapTestnetRouter);
+  ajiraPayFinanceToken.wait();
 
   console.log("Ajira Pay deployed to:", ajiraPayFinanceToken.address);
 }
