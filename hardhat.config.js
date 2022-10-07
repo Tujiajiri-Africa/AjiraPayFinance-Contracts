@@ -4,7 +4,7 @@ require('@nomiclabs/hardhat-ethers');
 
 require('dotenv').config()
 
-const mnemonic = process.env.MNEMONIC;
+const mnemonic = process.env.ACCOUNT_PRIVATE_KEY;
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY
 const AJIRAPAY_TESTNET_ADDRESS = process.env.AJIRAPAY_TESTNET_ADDRESS
 /** @type import('hardhat/config').HardhatUserConfig */

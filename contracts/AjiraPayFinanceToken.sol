@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.2;
+pragma solidity ^0.8.9;
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
@@ -280,11 +280,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         emit Transfer(address(0), _msgSender(), _totalSupply);
     }
 
-    function balanceOf(address account) public view virtual override(ERC20, IERC20) returns (uint256) {
+    function balanceOf(address account) public view virtual override(ERC20) returns (uint256) {
         return _balances[account];
     }
 
-    function totalSupply() public view virtual override(ERC20, IERC20) returns (uint256) {
+    function totalSupply() public view virtual override(ERC20) returns (uint256) {
         return _totalSupply;
     }
 
@@ -305,30 +305,25 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
 
     function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant {
         require(_token != address(this), "Invalid Token Address");
-        if (_token == address(0x0)) {
-            treasury.transfer(address(this).balance);
-            return;
-        }
         IERC20(_token).safeTransfer(msg.sender, _amount);
         emit ERC20TokenRecovered(_token, msg.sender, _amount, block.timestamp);
     }
     
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE){
         require(_newTreasury != address(0),"Invalid Address");
-        if(treasury == payable(_newTreasury)) return;
         address payable prevTreasury = treasury;
         treasury = payable(_newTreasury);
         _isExcludedFromFee[treasury] = true;
         emit TreasuryUpdated(msg.sender, prevTreasury, _newTreasury, block.timestamp);
     }
 
-    function totalEthBalance() public view returns(uint256){return address(this).balance;}
-
     function updateRouterAddress(address _newRouter) external onlyRole(MANAGER_ROLE) {
         require(_newRouter != address(0),"Invalid Router Address");
         IPancakeRouter02 prevRouter = pancakeswapV2Router;
         IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(_newRouter);
-        pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(address(this), _pancakeSwapV2Router.WETH()); 
+        pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(
+            address(this), 
+            _pancakeSwapV2Router.WETH()); 
         pancakeswapV2Router = _pancakeSwapV2Router;
         emit RouterUpdated(_msgSender(), address(prevRouter), _newRouter, block.timestamp);
     }
@@ -414,26 +409,23 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
             }
 
             bool takeFee = true;
-            _isExcludedFromFee[_sender] == true ? takeFee = false : takeFee = true;
-            _isExcludedFromFee[_recipient] == true ? takeFee = false : takeFee = true;
-            isInTaxHoliday == true ? takeFee = false: takeFee = true;
+            _isExcludedFromFee[_sender] ? takeFee = false : takeFee = true;
+            _isExcludedFromFee[_recipient] ? takeFee = false : takeFee = true;
+            isInTaxHoliday ? takeFee = false: takeFee = true;
 
             _transferStandard(_sender,_recipient,_amount,takeFee); 
     }
 
-    function _transferStandard(address _sender, address _recipient, uint256 _amount, bool takeFee) private returns(bool success){
+    function _transferStandard(address _sender, address _recipient, uint256 _amount, bool takeFee) private{
         _balances[_sender] = _balances[_sender].sub(_amount);
         uint256 amountReceived = (takeFee) ? _takeTaxes(_sender, _recipient, _amount) : _amount;
         _balances[_recipient] = _balances[_recipient].add(amountReceived);
 
-        if(isInTaxHoliday == false){
-            (,uint256 txFeeAmount,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
-            _takeLiquidity(liquidityFeeAmount);
-            _takeFee(txFeeAmount);
-        }
-
+        (,uint256 txFeeAmount,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
+        _takeLiquidity(liquidityFeeAmount);
+        _takeFee(txFeeAmount);
+        
         emit Transfer(_sender, _recipient, amountReceived);
-        return true;
     }
 
     function _swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
@@ -494,11 +486,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     }
 
     function _takeLiquidity(uint256 _liquidityFeeAmount) private {
-        _balances[address(this)] = _balances[address(this)].add(_liquidityFeeAmount);
+        _balances[address(this)] += _liquidityFeeAmount;
     }
 
     function _takeFee(uint256 _taxFeeAmount) private{
-        _balances[address(this)] = _balances[address(this)].add(_taxFeeAmount);
+        _balances[address(this)] += _taxFeeAmount;
     }
 
     function _takeTaxes(address from, address to, uint256 amount) internal returns (uint256) {
@@ -512,15 +504,14 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         }
 
         uint256 feeAmount = amount.mul(currentFee).div(10000);
-        _balances[address(this)] = _balances[address(this)].add(feeAmount);
+        _balances[address(this)] += feeAmount;
         return amount.sub(feeAmount);
     }
 
     function _validateAmount(address _sender, address _recipient, uint256 _amount) private view{
-        if(_amount > maxTransactionAmount){
-            if(_isExcludedFromMaxTx[_sender] == false || _isExcludedFromMaxTx[_recipient] == false){
-                require(_amount <= maxTransactionAmount,"Max Tx Exceeded");
-            }
+        if(!_isExcludedFromMaxTx[_sender] || !_isExcludedFromMaxTx[_recipient]){
+            require(_amount <= maxTransactionAmount,"Max Tx Exceeded");
         }
+        
     }
 }

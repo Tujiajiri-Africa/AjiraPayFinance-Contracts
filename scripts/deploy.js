@@ -20,16 +20,24 @@ async function main() {
   const pancakeswapMainnetRouter = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
   const ajiraPayTreasury = '0x4F6c0B945D00f55B6D5a7cEd1eCAA0690675527A';
 
+  //Airdorop Distributor
+  const AjiraPayAirdropDristributor = await hre.ethers.getContractFactory('AjiraPayAirdropDistributor');
+  const minRewarCap = 1;
+  const maxRewardCap = 1000;
+  const tokenDecimals = 18;
+
   const AjiraPayFinanceToken = await hre.ethers.getContractFactory('AjiraPayFinanceToken')
   const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy(pancakeswapMainnetRouter, ajiraPayTreasury);
 
-  ajiraPayFinanceToken.wait();
-
   await ajiraPayFinanceToken.deployed();
   //await ajiraPayFinanceToken.initDex(pancakeswapTestnetRouter);
-  ajiraPayFinanceToken.wait();
+  console.log("Ajira Pay Finance Token deployed to:", ajiraPayFinanceToken.address);
 
-  console.log("Ajira Pay deployed to:", ajiraPayFinanceToken.address);
+  const ajiraPayAirdropDristributor = await AjiraPayAirdropDristributor.deploy(ajiraPayFinanceToken.address,minRewarCap,maxRewardCap,tokenDecimals);
+
+  await ajiraPayAirdropDristributor.deployed();
+
+  console.log("Ajira Pay Airdrop Distributor deployed to:", ajiraPayAirdropDristributor.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
