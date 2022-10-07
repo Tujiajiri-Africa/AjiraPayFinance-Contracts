@@ -4,7 +4,8 @@ require('@nomiclabs/hardhat-ethers');
 
 require('dotenv').config()
 
-const mnemonic = process.env.ACCOUNT_PRIVATE_KEY;
+const mnemonic = process.env.MNEMONIC;
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY
 const AJIRAPAY_TESTNET_ADDRESS = process.env.AJIRAPAY_TESTNET_ADDRESS
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -32,9 +33,10 @@ module.exports = {
       gas:600000000000,
       gasPrice: 900000000000,
       gasLimit: 900000000000,
-      accounts: {
-        mnemonic: mnemonic
-      }
+      accounts: [PRIVATE_KEY]
+      // accounts: {
+      //   mnemonic: mnemonic
+      // }
     },
     bsc: {
       url: "https://bsc-dataseed.binance.org/",
@@ -42,9 +44,10 @@ module.exports = {
       gas:600000000000,
       gasPrice: 600000000000,
       gasLimit: 600000000000,
-      accounts: {
-        mnemonic: mnemonic
-      }
+      accounts: [PRIVATE_KEY]
+      // accounts: {
+      //   mnemonic: mnemonic
+      // }
     },
     celo: {
       url: "https://forno.celo.org",
