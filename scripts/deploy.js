@@ -7,14 +7,6 @@
 const hre = require("hardhat");
 
 async function main() {
-  //const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  //const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-  //const unlockTime = currentTimestampInSeconds + ONE_YEAR_IN_SECS;
-
-  //const lockedAmount = hre.ethers.utils.parseEther("1");
-
-  //const Lock = await hre.ethers.getContractFactory("Lock");
-  //const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
 
   const pancakeswapTestnetRouter = '0x6725F303b657a9451d8BA641348b6761A6CC7a17';
   const pancakeswapMainnetRouter = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
@@ -27,10 +19,10 @@ async function main() {
   const tokenDecimals = 18;
 
   const AjiraPayFinanceToken = await hre.ethers.getContractFactory('AjiraPayFinanceToken')
-  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy(pancakeswapMainnetRouter, ajiraPayTreasury);
+  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy(pancakeswapTestnetRouter, ajiraPayTreasury);
 
   await ajiraPayFinanceToken.deployed();
-  //await ajiraPayFinanceToken.initDex(pancakeswapTestnetRouter);
+  
   console.log("Ajira Pay Finance Token deployed to:", ajiraPayFinanceToken.address);
 
   const ajiraPayAirdropDristributor = await AjiraPayAirdropDristributor.deploy(ajiraPayFinanceToken.address,minRewarCap,maxRewardCap,tokenDecimals);
