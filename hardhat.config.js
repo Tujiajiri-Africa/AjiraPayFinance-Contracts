@@ -32,7 +32,9 @@ module.exports = {
       gas:600000000000,
       gasPrice: 900000000000,
       gasLimit: 900000000000,
-      accounts: {mnemonic: mnemonic}
+      accounts: {
+        mnemonic: mnemonic
+      }
     },
     bsc: {
       url: "https://bsc-dataseed.binance.org/",
@@ -40,7 +42,25 @@ module.exports = {
       gas:600000000000,
       gasPrice: 600000000000,
       gasLimit: 600000000000,
-      accounts: {mnemonic: mnemonic}
+      accounts: {
+        mnemonic: mnemonic
+      }
+    },
+    celo: {
+      url: "https://forno.celo.org",
+      accounts: {
+        mnemonic: mnemonic,
+        path: "m/44'/52752'/0'/0"
+      },
+      chainId: 42220
+    },
+    alfajores: {
+      url: "https://alfajores-forno.celo-testnet.org",
+      accounts: {
+        mnemonic: mnemonic,
+        path: "m/44'/52752'/0'/0"
+      },
+      chainId: 44787
     }
   },
   paths: {
