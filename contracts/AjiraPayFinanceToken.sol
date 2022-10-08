@@ -203,8 +203,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     using SafeMath for uint256;
 
     uint256 private _totalSupply = 200_000_000 * 1e18;
-    string private _name = 'Ajira Pay Finance Token Test';
-    string private _symbol = 'AJPFT';
+    string private _name = 'Ajira Pay';
+    string private _symbol = 'AJP';
 
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
