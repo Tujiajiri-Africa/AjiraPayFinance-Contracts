@@ -203,8 +203,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     using SafeMath for uint256;
 
     uint256 private _totalSupply = 200_000_000 * 1e18;
-    string private _name = 'Ajira Pay';
-    string private _symbol = 'AJP';
+    string private _name = 'Ajira Pay Finance Token Test';
+    string private _symbol = 'AJPFT';
 
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
@@ -216,8 +216,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     bool public swapAndLiquifyEnabled = true;
     bool public isInTaxHoliday = false;
 
-    mapping(address => bool) private _isExcludedFromFee;
-    mapping(address => bool) private _isExcludedFromMaxTx;
+    mapping(address => bool) public _isExcludedFromFee;
+    mapping(address => bool) public _isExcludedFromMaxTx;
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
 
@@ -228,15 +228,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     uint256 public minLiquidityAmount; 
     uint256 public maxTransactionAmount;
     
-    event ERC20TokenRecovered(address indexed caller, address indexed recepient, uint indexed amount, uint timestamp);
-    event TreasuryUpdated(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
-    event MinTokensBeforeSwapUpdated(uint256 minTokensBeforeSwap);
-    event SwapAndLiquifyEnabledUpdated(bool enabled);
-    event RouterUpdated(address indexed caller, address indexed prevRouter, address indexed newRouter, uint timestamp);
     event SwapAndLiquify(uint256 tokensSwapped,uint256 ethReceived,uint256 tokensIntoLiqudity);
-    event MaxTransactionUpdated(address indexed caller, uint256 indexed prevAmount, uint256 indexed newAmount, uint timestamp);
-    event TaxHolidayActivated(address indexed caller, uint indexed timestamp);
-    event TaxHolidayDeactivated(address indexed caller, uint indexed timestamp);
+    event Burn(address indexed from, address indexed to, uint indexed amount, uint timestamp);
 
     modifier lockTheSwap {
         inSwapAndLiquify = true;
@@ -248,8 +241,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         require(_router != address(0),"Invalid Address");
         require(_treasury != address(0),"Invalid Address");
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
-        _grantRole(MANAGER_ROLE, _msgSender());
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(MANAGER_ROLE, msg.sender);
 
         treasury = payable(_treasury);
 
@@ -260,11 +253,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
 
         pancakeswapV2Router = _pancakeSwapV2Router;
 
-        _isExcludedFromFee[_msgSender()] = true;
+        _isExcludedFromFee[msg.sender] = true;
         _isExcludedFromFee[address(this)] = true;
         _isExcludedFromFee[treasury] = true;
         
-        _isExcludedFromMaxTx[_msgSender()] = true;
+        _isExcludedFromMaxTx[msg.sender] = true;
         _isExcludedFromMaxTx[address(this)] = true;
         _isExcludedFromMaxTx[treasury] = true;
 
@@ -276,8 +269,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         minLiquidityAmount = _totalSupply.div(1000).div(4); //50_000
         maxTransactionAmount = _totalSupply.div(200); //1000_000
 
-        _balances[_msgSender()] = _balances[_msgSender()].add(_totalSupply);
-        emit Transfer(address(0), _msgSender(), _totalSupply);
+        _balances[msg.sender] += _totalSupply;
+        emit Transfer(address(0), msg.sender, _totalSupply);
     }
 
     function balanceOf(address account) public view virtual override(ERC20) returns (uint256) {
@@ -306,26 +299,21 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant {
         require(_token != address(this), "Invalid Token Address");
         IERC20(_token).safeTransfer(msg.sender, _amount);
-        emit ERC20TokenRecovered(_token, msg.sender, _amount, block.timestamp);
     }
     
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE){
         require(_newTreasury != address(0),"Invalid Address");
-        address payable prevTreasury = treasury;
         treasury = payable(_newTreasury);
         _isExcludedFromFee[treasury] = true;
-        emit TreasuryUpdated(msg.sender, prevTreasury, _newTreasury, block.timestamp);
     }
 
     function updateRouterAddress(address _newRouter) external onlyRole(MANAGER_ROLE) {
         require(_newRouter != address(0),"Invalid Router Address");
-        IPancakeRouter02 prevRouter = pancakeswapV2Router;
         IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(_newRouter);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(
             address(this), 
             _pancakeSwapV2Router.WETH()); 
         pancakeswapV2Router = _pancakeSwapV2Router;
-        emit RouterUpdated(_msgSender(), address(prevRouter), _newRouter, block.timestamp);
     }
 
     function setTxFeePercentage(uint256 _txFee) external onlyRole(MANAGER_ROLE) {
@@ -350,38 +338,45 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
 
     function setSwapAndLiquifyEnabled() external onlyRole(MANAGER_ROLE)   {
         swapAndLiquifyEnabled = true;
-        emit SwapAndLiquifyEnabledUpdated(true);
     }
 
     function excludeFromMaxTransaction(address _beneficiary) external onlyRole(MANAGER_ROLE){
         _isExcludedFromMaxTx[_beneficiary] = true;
     }
 
+    function includeInMaxTransaction(address _beneficiary) external onlyRole(MANAGER_ROLE){
+        _isExcludedFromMaxTx[_beneficiary] = false;
+    }
+
+    function excludeFromFee(address _beneficiary) public onlyRole(MANAGER_ROLE){
+        _isExcludedFromFee[_beneficiary] = true;
+    }
+
+    function includeInFee(address _beneficiary) public onlyRole(MANAGER_ROLE){
+        _isExcludedFromFee[_beneficiary] = false;
+    }
+
     function setMaxTransactionAmount(uint _amount) external onlyRole(MANAGER_ROLE){
         require(_amount != 0,"Zero Amt");
-        require(_amount < _totalSupply.div(100));
-        uint256 prevAmount = maxTransactionAmount;
+        require(_amount < (_totalSupply /100));
         maxTransactionAmount = _amount;
-        emit MaxTransactionUpdated(_msgSender(), prevAmount, _amount, block.timestamp);
     }
 
     function activateTaxHoliday() public onlyRole(MANAGER_ROLE) {
         isInTaxHoliday = true;
-        emit TaxHolidayActivated(_msgSender(), block.timestamp);
     }
 
     function deActivateTaxHoliday() public onlyRole(MANAGER_ROLE) {
         isInTaxHoliday = false;
-        emit TaxHolidayDeactivated(_msgSender(), block.timestamp);
     }
 
     function burn(address _account, uint _amount) public onlyRole(MANAGER_ROLE){
         require(_account != address(0), "Invalid Address");
         uint256 accountBalance = _balances[_account];
         require(accountBalance >= _amount, "Insufficient Balance");
-        _balances[_account] = accountBalance.sub(_amount);
-        _totalSupply = _totalSupply.sub(_amount);
-        emit Transfer(_account, address(0), _amount);
+        _balances[_account] -= _amount;
+        _totalSupply -= _amount;
+        emit Burn(_account, address(0), _amount, block.timestamp);
     }
 
     receive() external payable {}
@@ -417,9 +412,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     }
 
     function _transferStandard(address _sender, address _recipient, uint256 _amount, bool takeFee) private{
-        _balances[_sender] = _balances[_sender].sub(_amount);
+        _balances[_sender] -= _amount;
         uint256 amountReceived = (takeFee) ? _takeTaxes(_sender, _recipient, _amount) : _amount;
-        _balances[_recipient] = _balances[_recipient].add(amountReceived);
+        _balances[_recipient] += amountReceived;
 
         (,uint256 txFeeAmount,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
         _takeLiquidity(liquidityFeeAmount);
@@ -429,17 +424,17 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     }
 
     function _swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
-      uint256 half = contractTokenBalance.div(2);
-      uint256 otherHalf = contractTokenBalance.sub(half);
+      uint256 half = contractTokenBalance / 2;
+      uint256 otherHalf = contractTokenBalance - half;
       uint256 initialBalance = address(this).balance;
 
       _swapTokensForBnb(half); 
 
-      uint256 newBalance = address(this).balance.sub(initialBalance);
+      uint256 newBalance = address(this).balance - initialBalance;
 
-      uint256 halfBalance = newBalance.div(2);
+      uint256 halfBalance = newBalance / 2;
       payable(treasury).transfer(halfBalance);
-      uint256 remainingBalance = newBalance.sub(halfBalance);      
+      uint256 remainingBalance = newBalance - halfBalance;      
       _addLiquidity(otherHalf, remainingBalance);
       emit SwapAndLiquify(half, remainingBalance, otherHalf);
     }
@@ -481,7 +476,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     function _getFeeAmountValues(uint256 _tAmount) private view returns (uint256, uint256, uint256) {
       uint256 tFee = _calculateTaxFee(_tAmount);
       uint256 tLiquidity = _calculateLiquidityFee(_tAmount);
-      uint256 tTransferAmount = _tAmount.sub(tFee).sub(tLiquidity);
+      uint256 tTransferAmount = _tAmount - tFee - tLiquidity;
       return (tTransferAmount, tFee, tLiquidity);
     }
 
@@ -511,7 +506,6 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     function _validateAmount(address _sender, address _recipient, uint256 _amount) private view{
         if(!_isExcludedFromMaxTx[_sender] || !_isExcludedFromMaxTx[_recipient]){
             require(_amount <= maxTransactionAmount,"Max Tx Exceeded");
-        }
-        
+        }   
     }
 }
