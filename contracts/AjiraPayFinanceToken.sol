@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 import '@openzeppelin/contracts/access/Ownable.sol';
-import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
+//import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
@@ -198,12 +198,11 @@ interface IPancakeRouter02 is IPancakeRouter01 {
     ) external;
 }
 
-contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl{
+contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGuard
     using SafeERC20 for IERC20;
-    using SafeMath for uint256;
 
     uint256 private _totalSupply = 200_000_000 * 1e18;
-    string private _name = 'Ajira Pay';
+    string private _name = 'Ajira Pay Finance';
     string private _symbol = 'AJP';
 
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
@@ -211,7 +210,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     IPancakeRouter02 public pancakeswapV2Router;
     address public pancakeswapV2Pair;
     address payable public treasury;
-    address DEAD = 0x000000000000000000000000000000000000dEaD;
+    address private immutable DEAD = 0x000000000000000000000000000000000000dEaD;
 
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
@@ -267,8 +266,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         liquidityTreasuryPercent = 700; //7%
         buyBackTreasuryPercent = 300;//3%
     
-        minLiquidityAmount = _totalSupply.div(1000).div(4); //50_000
-        maxTransactionAmount = _totalSupply.div(200); //1000_000
+        minLiquidityAmount = _totalSupply / 1000 / 4; //50_000
+        maxTransactionAmount = _totalSupply / 200 ; //1000_000
 
         _balances[msg.sender] += _totalSupply;
         emit Transfer(address(0), msg.sender, _totalSupply);
@@ -292,13 +291,13 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
             super.supportsInterface(interfaceId);
     }
 
-    function recoverBNB(uint _amount) public onlyRole(MANAGER_ROLE) {
+    function recoverBNB(uint _amount) public onlyRole(MANAGER_ROLE){ //nonReentrant
         uint256 currentBalance = address(this).balance;
         require(_amount >= currentBalance,"Insufficient Balance");
         treasury.transfer(_amount);
     }
 
-    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant {
+    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) { //nonReentrant
         require(_token != address(this), "Invalid Token Address");
         IERC20(_token).safeTransfer(msg.sender, _amount);
     }
@@ -364,7 +363,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         require(_account != address(0), "Invalid Address");
         uint256 accountBalance = _balances[_account];
         require(accountBalance >= _amount, "Insufficient Balance");
-        accountBalance -= _amount;
+        unchecked{
+            _balances[_account] = accountBalance - _amount;
+        }
         _totalSupply -= _amount;
         emit Burn(_account, address(0), _amount, block.timestamp);
     }
@@ -373,20 +374,22 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
 
     //********************************** INTERNAL HELPER FUNCTIONS *********************************** */
     function _transfer(address _sender, address _recipient, uint _amount) internal virtual override(ERC20) {
-        require(_amount > 0, "Transfer amount must be greater than zero");
+        require(_amount > 0, "Amount Cannot Be Zero");
         require(_sender != address(0), "Invalid Address");
         require(_recipient != address(0), "Invalid Address");
 
         if(_sender != owner() && _recipient != owner()) {
-            require(_amount <= maxTransactionAmount, "Transfer amount exceeds the maxTxAmount.");
+            require(_amount <= maxTransactionAmount, "Amount Exceeds Max Tx");
         }
 
         uint256 senderBalance = _balances[_sender];
+ 
         require(senderBalance >= _amount, "Insufficient Balance");
 
         uint256 contractTokenBalance = balanceOf(address(this));
 
         bool overMinTokenBalance = contractTokenBalance >= minLiquidityAmount;
+
         if (
             overMinTokenBalance &&
             !inSwapAndLiquify &&
@@ -406,11 +409,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
     }
 
     function _transferStandard(address _sender, address _recipient, uint256 _amount, bool _shouldTakeFee) private{
-        uint256 senderBalance = _balances[_sender];
-        uint256 recipientBalance = _balances[_recipient];
-        senderBalance -= _amount;
+        _balances[_sender] -= _amount;
         uint256 amountReceived = (_shouldTakeFee) ? _takeTaxes(_sender, _recipient, _amount) : _amount;
-        recipientBalance += amountReceived;
+        _balances[_recipient] += amountReceived;
 
         (,uint256 txFeeAmount,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
         _takeLiquidity(liquidityFeeAmount);
@@ -499,19 +500,16 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
       return (tTransferAmount, tFee, tLiquidity);
     }
 
-    function _takeLiquidity(uint256 _liquidityFeeAmount) private view{
-        uint256 contractBalance = _balances[address(this)];
-        contractBalance += _liquidityFeeAmount;
+    function _takeLiquidity(uint256 _liquidityFeeAmount) private{
+        _balances[address(this)] += _liquidityFeeAmount;
     }
 
-    function _takeFee(uint256 _taxFeeAmount) private view{
-        uint256 contractBalance = _balances[address(this)];
-        contractBalance += _taxFeeAmount;
+    function _takeFee(uint256 _taxFeeAmount) private{
+        _balances[address(this)] += _taxFeeAmount;
     }
 
-    function _takeTaxes(address from, address to, uint256 amount) private view returns (uint256) {
+    function _takeTaxes(address from, address to, uint256 amount) private returns (uint256) {
         uint256 currentFee;
-        uint256 contractBalance = _balances[address(this)];
         if (from == pancakeswapV2Pair) {
             currentFee = buyFee;
         } else if (to == pancakeswapV2Pair) {
@@ -521,7 +519,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363, ReentrancyGuard,AccessControl
         }
 
         uint256 feeAmount = amount * currentFee / 10000;
-        contractBalance += feeAmount;
+        _balances[address(this)] += feeAmount;
         return amount - feeAmount;
     }
 }
