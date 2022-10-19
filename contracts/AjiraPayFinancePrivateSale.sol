@@ -19,12 +19,16 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     AggregatorV3Interface internal priceFeed;
 
     address payable public treasury;
-    address private constant CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS = 0x14e613AC84a31f709eadbdF89C6CC390fDc9540A;
+    address private constant CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS = 0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE;
+    address private constant CHAINLINK_TESTNET_BNB_USD_PRICEFEED_ADDRESS = 0x2514895c72f50D8bd4B4F9b1110F0D6bD2c97526;
 
+    address[] public investors;
+    
     bool public isPresaleOpen = false;
     bool public isPresalePaused = false;
     bool public isOpenForClaims = false;
-
+    
+    uint public totalInvestors = 0;
     uint public minTokensToPurchasePerWallet;
     uint public maxTokensToPurchasePerWallet;
     uint public maxBNBPerContributor = 30;
@@ -35,6 +39,8 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalTokensClaimed = 0;
     uint public pricePerToken = 10 * 10** 18;
     uint public totalWeiRaised = 0;
+
+    uint public maxTokenCapForPresale = 15_000_000 * 1e18;
 
     uint public coolDown = (60 * 60 );
     
@@ -48,6 +54,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     mapping(address => uint) public totalBNBInvestmentsByIUser;
     mapping(address => bool) public hasClaimedRefund;
     mapping(address => bool) public canClaimTokens;
+    mapping(address => bool) public isActiveInvestor;
 
     mapping(address => uint256) public nextPossiblePurchaseTimeByUser;
 
@@ -58,7 +65,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event PresalePaused(address indexed caller, uint indexed timestamp);
     event PresaleUnpaused(address indexed caller, uint indexed timestamp);
     event Contribute(address indexed beneficiary, uint indexed weiAmount, uint indexed tokenAmountBought, uint timestamp);
-    event ClaimContribution(address indexed beneficiary, uint indexed tokenAmountReceived, uint indexed timestamp);
+    event Claim(address indexed beneficiary, uint indexed tokenAmountReceived, uint indexed timestamp);
     event TreasuryUpdated(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
     event BNBRecovered(address indexed caller, address indexed destinationWallet, uint indexed amount, uint timestamp);
     event ERC20TokenRecovered(address indexed caller, address indexed destination, uint amount, uint timestamp);
@@ -110,7 +117,13 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
         ajiraPayToken = IERC20(_token); 
         treasury = _treasury;
-        priceFeed = AggregatorV3Interface(CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS);
+
+        uint256 id = _getChainID();
+        if(id == 56){
+            priceFeed = AggregatorV3Interface(CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS);
+        }else if(id == 97){
+            priceFeed = AggregatorV3Interface(CHAINLINK_TESTNET_BNB_USD_PRICEFEED_ADDRESS);
+        }
     }
 
     function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
@@ -119,7 +132,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function closePresale() public onlyRole(MANAGER_ROLE) presaleOpen{
-        isPresaleOpen = false;
+        _setPresaleClosed();
         emit PresaleClosed(_msgSender(), block.timestamp);
     }
 
@@ -133,8 +146,16 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit PresaleUnpaused(_msgSender(), block.timestamp);
     }
 
+    function activateTokenClaims() public onlyRole(MANAGER_ROLE){
+        _setClaimStarted();
+    }
+
+    function deactivateTokenClaims() public onlyRole(MANAGER_ROLE){
+        _setClaimsClosed();
+    }
+
     function claimUnsoldTokens() public onlyRole(MANAGER_ROLE) presaleClosed nonReentrant{
-        _refundUnsoldTokens();
+        _refundUnsoldTokens(msg.sender);
     }
 
     function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
@@ -143,7 +164,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit TreasuryUpdated(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
 
-    function contribute() public payable nonReentrant{
+    function contribute() public payable nonReentrant presaleOpen{
         _checkUserCoolDownBeforeNextPurchase(msg.sender);
         uint256 weiAmount = msg.value;
         require(weiAmount > 0, "No Amount Specified");
@@ -157,10 +178,11 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         totalBNBInvestmentsByIUser[msg.sender] = totalBNBInvestmentsByIUser[msg.sender].add(weiAmount);
         totalTokensSold = totalTokensSold.add(tokenAmount);
         totalWeiRaised = totalWeiRaised.add(weiAmount);
-        canClaimTokens[msg.sender] = true;
-        nextPossiblePurchaseTimeByUser[msg.sender] = block.timestamp.add(120); //2mins
-        lastUserBuyTimeInSec[msg.sender] = block.timestamp;
+        _updateInvestorCountAndStatus();
         _forwardFunds();
+         if(totalTokensSold > maxTokenCapForPresale){
+             _setPresaleClosed();
+        }
         emit Contribute(msg.sender, weiAmount, tokenAmount, block.timestamp);
     }
 
@@ -177,7 +199,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
             totalTokensClaimed = totalTokensClaimed.add(totalClaimableTokens);
         }
         canClaimTokens[msg.sender] = false;
-        emit ClaimContribution(msg.sender, totalClaimableTokens, block.timestamp);
+        emit Claim(msg.sender, totalClaimableTokens, block.timestamp);
     }
 
     function recoverBNB() public onlyRole(MANAGER_ROLE) nonReentrant{
@@ -218,11 +240,11 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         treasury.transfer(msg.value);
     }
 
-    function _refundUnsoldTokens() private{
+    function _refundUnsoldTokens(address _destination) private{
         uint256 availableTokenBalance = getContractTokenBalance();
         uint256 refundableBalance = availableTokenBalance.sub(totalTokensSold);
         require(refundableBalance >= availableTokenBalance,"Insufficient Token");
-        require(ajiraPayToken.transfer(msg.sender, refundableBalance),"Failed To Refund Tokens");
+        require(ajiraPayToken.transfer(_destination, refundableBalance),"Failed To Refund Tokens");
     }
 
     function _checkUserCoolDownBeforeNextPurchase(address _account) private view{
@@ -230,5 +252,37 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         if(block.timestamp < nextPurchaseTime){
             require(block.timestamp >= nextPurchaseTime,"Wait For 2 Mins Before Next Purchase");
         }
+    }
+
+    function _setClaimStarted() private{
+        isOpenForClaims = true;
+    }
+
+    function _setClaimsClosed() private{
+        isOpenForClaims = false;
+    }
+
+    function _setPresaleClosed() private{
+        isPresaleOpen = false;
+    }
+
+    function _updateInvestorCountAndStatus() private{
+        if(isActiveInvestor[msg.sender] == false){
+            totalInvestors = totalInvestors.add(1);
+            investors.push(msg.sender);
+        }else{
+            isActiveInvestor[msg.sender] = true;
+        }
+        canClaimTokens[msg.sender] = true;
+        nextPossiblePurchaseTimeByUser[msg.sender] = block.timestamp.add(120); //2mins
+        lastUserBuyTimeInSec[msg.sender] = block.timestamp;
+    }
+
+    function _getChainID() private view returns (uint256) {
+        uint256 id;
+        assembly {
+            id := chainid()
+        }
+    return id;
     }
 }
