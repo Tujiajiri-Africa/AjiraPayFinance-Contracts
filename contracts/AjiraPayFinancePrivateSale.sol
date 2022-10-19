@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity =0.8.4;
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/access/AccessControl.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
@@ -19,7 +19,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     AggregatorV3Interface internal priceFeed;
 
     address payable public treasury;
-    address private immutable CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS = 0x14e613AC84a31f709eadbdF89C6CC390fDc9540A;
+    address private constant CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS = 0x14e613AC84a31f709eadbdF89C6CC390fDc9540A;
 
     bool public isPresaleOpen = false;
     bool public isPresalePaused = false;
@@ -63,8 +63,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event BNBRecovered(address indexed caller, address indexed destinationWallet, uint indexed amount, uint timestamp);
     event ERC20TokenRecovered(address indexed caller, address indexed destination, uint amount, uint timestamp);
 
-    //if 1 token = 0.05$
-    //run presale for 1 month
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
         _;
@@ -105,15 +103,14 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
-    constructor(address _token, uint _presaleDurationInSec){
+    constructor(address _token, address payable _treasury){
         require(_token != address(0),"Invalid Address");
         _grantRole(MANAGER_ROLE, _msgSender());
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
         ajiraPayToken = IERC20(_token); 
-        treasury = payable(_msgSender());
+        treasury = _treasury;
         priceFeed = AggregatorV3Interface(CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS);
-        presaleDurationInSec = _presaleDurationInSec;
     }
 
     function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
@@ -134,6 +131,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     function unpausePresale() public onlyRole(MANAGER_ROLE) presalePaused{
         isPresalePaused = false;
         emit PresaleUnpaused(_msgSender(), block.timestamp);
+    }
+
+    function claimUnsoldTokens() public onlyRole(MANAGER_ROLE) presaleClosed nonReentrant{
+        _refundUnsoldTokens();
     }
 
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
@@ -180,7 +181,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function recoverBNB() public onlyRole(MANAGER_ROLE) nonReentrant{
-        treasury.transfer(address(this).balance);
+        uint256 balance = getContractBNBBalance();
+        require(balance > 0,"Insufficient Contract Balance");
+        treasury.transfer(balance);
+        emit BNBRecovered(msg.sender, treasury, balance, block.timestamp);
     }
 
     function recoverLostTokensForInvestor(address _token, address _account, uint _amount) public 
@@ -218,11 +222,11 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         treasury.transfer(msg.value);
     }
 
-    function _refundUnsoldTokens(uint256 _amount) private presaleClosed{
-        uint256 availableTokenBalance = ajiraPayToken.balanceOf(address(this));
+    function _refundUnsoldTokens() private{
+        uint256 availableTokenBalance = getContractTokenBalance();
         uint256 refundableBalance = availableTokenBalance.sub(totalTokensSold);
         require(refundableBalance >= availableTokenBalance,"Insufficient Token");
-        require(ajiraPayToken.transfer(msg.sender, _amount),"Failed To Refund Tokens");
+        require(ajiraPayToken.transfer(msg.sender, refundableBalance),"Failed To Refund Tokens");
     }
 
     function _checkUserCoolDownBeforeNextPurchase(address _account) private view{
