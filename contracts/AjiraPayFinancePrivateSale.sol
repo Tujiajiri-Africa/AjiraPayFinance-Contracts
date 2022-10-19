@@ -137,9 +137,9 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _refundUnsoldTokens();
     }
 
-    function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
+    function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
         address payable prevTreasury = treasury;
-        treasury = payable(_newTreasury);
+        treasury = _newTreasury;
         emit TreasuryUpdated(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
 
@@ -193,10 +193,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         require(token != ajiraPayToken,"Invalid Token");
         token.safeTransfer(_account, _amount);
         emit ERC20TokenRecovered(_msgSender(), _account, _amount, block.timestamp);
-    }
-
-    function claimRefund() public nonReentrant{
-
     }
 
     function getContractTokenBalance() public view returns(uint256){
