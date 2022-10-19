@@ -56,7 +56,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     mapping(address => bool) public canClaimTokens;
     mapping(address => bool) public isActiveInvestor;
 
-    mapping(address => uint256) public nextPossiblePurchaseTimeByUser;
+    mapping(address => uint) public nextPossiblePurchaseTimeByUser;
 
     mapping(address => uint) public lastUserBuyTimeInSec; //store user's cooldown time to 1 minute
 
@@ -158,7 +158,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _refundUnsoldTokens(msg.sender);
     }
 
-    function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
+    function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) 
+    nonZeroAddress(_newTreasury) 
+    presalePaused
+    {
         address payable prevTreasury = treasury;
         treasury = _newTreasury;
         emit TreasuryUpdated(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
@@ -180,7 +183,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         totalWeiRaised = totalWeiRaised.add(weiAmount);
         _updateInvestorCountAndStatus();
         _forwardFunds();
-         if(totalTokensSold > maxTokenCapForPresale){
+         if(totalTokensSold > maxTokenCapForPresale){ //TODO multiply(totalTokensSold) by 10 ** 18
              _setPresaleClosed();
         }
         emit Contribute(msg.sender, weiAmount, tokenAmount, block.timestamp);
