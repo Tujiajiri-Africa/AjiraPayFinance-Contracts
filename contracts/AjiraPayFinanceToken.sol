@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
+pragma solidity =0.8.4;
 import '@openzeppelin/contracts/access/Ownable.sol';
 //import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
@@ -317,7 +317,10 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGua
         pancakeswapV2Router = _pancakeSwapV2Router;
     }
 
-    function setDeductionFeePercentages(uint256 _txFee, uint256 _liquidityFee, uint256 _buyFee, uint256 _sellFee) public onlyRole(MANAGER_ROLE){
+    function setDeductionFeePercentages(uint256 _txFee, uint256 _liquidityFee, uint256 _buyFee, uint256 _sellFee) 
+    public 
+    onlyRole(MANAGER_ROLE)
+    {
         uint256 feeTotals = _txFee + _liquidityFee + _buyFee + _sellFee;
         require(feeTotals <= 1000,"Fees Cannot Exceed 100%");
         txFee = _txFee;

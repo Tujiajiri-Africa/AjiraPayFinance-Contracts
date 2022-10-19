@@ -23,13 +23,18 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     bool public isPresaleOpen = false;
     bool public isPresalePaused = false;
+    bool public isOpenForClaims = false;
 
-    uint public totalBNBraised;
     uint public minTokensToPurchasePerWallet;
     uint public maxTokensToPurchasePerWallet;
     uint public maxBNBPerContributor = 30;
     uint public minBNBPerUser = 10;
     uint public presaleDurationInSec;
+    uint public tokenDecimals = 18;
+    uint public totalTokensSold = 0;
+    uint public totalTokensClaimed = 0;
+    uint public pricePerToken = 10 * 10** 18;
+    uint public totalWeiRaised = 0;
 
     uint public coolDown = (60 * 60 );
     
@@ -42,6 +47,9 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     mapping(address => uint) public totalUnclaimedTokenContributionsByUser;
     mapping(address => uint) public totalBNBInvestmentsByIUser;
     mapping(address => bool) public hasClaimedRefund;
+    mapping(address => bool) public canClaimTokens;
+
+    mapping(address => uint256) public nextPossiblePurchaseTimeByUser;
 
     mapping(address => uint) public lastUserBuyTimeInSec; //store user's cooldown time to 1 minute
 
@@ -92,6 +100,11 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
+    modifier claimsOpen(){
+        require(isOpenForClaims == true,"Claims Not Open");
+        _;
+    }
+
     constructor(address _token, uint _presaleDurationInSec){
         require(_token != address(0),"Invalid Address");
         _grantRole(MANAGER_ROLE, _msgSender());
@@ -124,33 +137,46 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury) presalePaused{
-        if(treasury == _newTreasury) return;
         address payable prevTreasury = treasury;
         treasury = payable(_newTreasury);
         emit TreasuryUpdated(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
 
     function contribute() public payable nonReentrant{
-        //get user amount via msg.value
-        //check that this value is equal to or greator than the minimum BNB contribution
-        //check that this value is greator than or equal to the maximum BNB contribution per wallet
-        //create a locked timelock for this user
-        //update user contrinutions, both total BNB & token contributions
-        //update total BNB waised
-        //update total tokens sold
-        //send BNB to treasury wallet
-        //send BNB to the time locked wallet
-        //emit event
-        //send BNB to the time locked wallet
-
-        uint256 amount = msg.value;
-        require(amount > 0, "No Amount Specified");
-        require(totalBNBInvestmentsByIUser[_msgSender()].add(amount) <= 1,"Max User Cap Reached");
-        require(msg.value.add(1) <= minUSDPricePerToken,"Minimum Contribution");
+        _checkUserCoolDownBeforeNextPurchase(msg.sender);
+        uint256 weiAmount = msg.value;
+        require(weiAmount > 0, "No Amount Specified");
+        // require(totalBNBInvestmentsByIUser[_msgSender()].add(weiAmount) <= 1,"Max User Cap Reached");
+        // require(msg.value.add(1) <= minUSDPricePerToken,"Minimum Contribution");
+        // require(msg.value.add(1) <= maxBNBPerContributor,"Maximum Contribution");
+        (uint256 price, uint256 decimals) = _getLatestBNBPriceInUSD();
+        uint256 usdAmountFromValue = weiAmount.mul(price).div(10 ** decimals);
+        uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
+        totalTokenContributionsByUser[msg.sender] = totalTokenContributionsByUser[msg.sender].add(tokenAmount);
+        totalBNBInvestmentsByIUser[msg.sender] = totalBNBInvestmentsByIUser[msg.sender].add(weiAmount);
+        totalTokensSold = totalTokensSold.add(tokenAmount);
+        totalWeiRaised = totalWeiRaised.add(weiAmount);
+        canClaimTokens[msg.sender] = true;
+        nextPossiblePurchaseTimeByUser[msg.sender] = block.timestamp.add(120); //2mins
+        lastUserBuyTimeInSec[msg.sender] = block.timestamp;
+        _forwardFunds();
+        emit Contribute(msg.sender, weiAmount, tokenAmount, block.timestamp);
     }
 
-    function claimContribution() public nonReentrant{
-
+    function claimContribution() public claimsOpen nonReentrant{
+        require(canClaimTokens[msg.sender] == true,"Already Claimed Contribution");
+        uint256 totalClaimableTokens = totalTokenContributionsByUser[msg.sender];
+        require(totalClaimableTokens > 0,"Insufficient Token Claims");
+        require(
+            IERC20(ajiraPayToken).transfer(msg.sender, totalClaimableTokens),
+            "Failed to send tokens"
+        );
+        totalTokenContributionsByUser[msg.sender] = 0;
+        unchecked{
+            totalTokensClaimed = totalTokensClaimed.add(totalClaimableTokens);
+        }
+        canClaimTokens[msg.sender] = false;
+        emit ClaimContribution(msg.sender, totalClaimableTokens, block.timestamp);
     }
 
     function recoverBNB() public onlyRole(MANAGER_ROLE) nonReentrant{
@@ -182,16 +208,27 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     //INTERNAL HELPER FUNCTIONS
-    function _getLatestBNBPriceInUSD() private view returns(int256){
+    function _getLatestBNBPriceInUSD() private view returns(uint256, uint256){
         (, int256 price, , , ) = priceFeed.latestRoundData();
-        return price;
+        uint256 decimals = priceFeed.decimals();
+        return (uint256(price), decimals);
     }
 
     function _forwardFunds() private{
         treasury.transfer(msg.value);
     }
 
-    function _refundUnsoldTokens() private{
+    function _refundUnsoldTokens(uint256 _amount) private presaleClosed{
+        uint256 availableTokenBalance = ajiraPayToken.balanceOf(address(this));
+        uint256 refundableBalance = availableTokenBalance.sub(totalTokensSold);
+        require(refundableBalance >= availableTokenBalance,"Insufficient Token");
+        require(ajiraPayToken.transfer(msg.sender, _amount),"Failed To Refund Tokens");
+    }
 
+    function _checkUserCoolDownBeforeNextPurchase(address _account) private view{
+        uint256 nextPurchaseTime = nextPossiblePurchaseTimeByUser[_account];
+        if(block.timestamp < nextPurchaseTime){
+            require(block.timestamp >= nextPurchaseTime,"Wait For 2 Mins Before Next Purchase");
+        }
     }
 }
