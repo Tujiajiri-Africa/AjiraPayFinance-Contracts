@@ -125,7 +125,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit PausePresale(_msgSender(), block.timestamp);
     }
 
-    function unpausePresale() public onlyRole(MANAGER_ROLE) presalePaused{
+    function unPausePresale() public onlyRole(MANAGER_ROLE) presalePaused{
         isPresalePaused = false;
         emit UnpausePresale(_msgSender(), block.timestamp);
     }
@@ -135,7 +135,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit OpenTokenClaims(_msgSender(), block.timestamp);
     }
 
-    function deactivateTokenClaims() public onlyRole(MANAGER_ROLE){
+    function deActivateTokenClaims() public onlyRole(MANAGER_ROLE){
         _setClaimsClosed();
         emit CloseTokenClaims(_msgSender(), block.timestamp);
     }
