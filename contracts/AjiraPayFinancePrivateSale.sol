@@ -6,7 +6,7 @@ import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
+import '@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol';
 
 contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     using SafeMath for uint256;
@@ -39,21 +39,16 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public maxTokenCapForPresale = 15_000_000 * 1e18;
     uint public maxTokensToPurchasePerWallet = 2000_000 * 1e18;
     uint public minTokensToPurchasePerWallet;
-    
-    uint private minUsdValuePerTokenDiviser = 400;
-    uint public minUSDPricePerTokenFactor = 10000;
-    uint public minUSDPricePerToken = minUsdValuePerTokenDiviser.div(minUSDPricePerTokenFactor) * 1e18;
 
     mapping(address => uint) public totalTokenContributionsByUser;
     mapping(address => uint) public totalTokenContributionsClaimedByUser;
     mapping(address => uint) public totalBNBInvestmentsByIUser;
-    mapping(address => bool) public hasClaimedRefund;
     mapping(address => bool) public canClaimTokens;
     mapping(address => bool) public isActiveInvestor;
 
     mapping(address => uint) public nextPossiblePurchaseTimeByUser;
 
-    mapping(address => uint) public lastUserBuyTimeInSec; //store user's cooldown time to 1 minute
+    mapping(address => uint) public lastUserBuyTimeInSec;
 
     event StartPresale(address indexed caller, uint indexed timestamp);
     event ClosePresale(address indexed caller, uint indexed timestamp);
@@ -65,7 +60,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event RecoverBNB(address indexed caller, address indexed destinationWallet, uint indexed amount, uint timestamp);
     event RecoverERC20Tokens(address indexed caller, address indexed destination, uint amount, uint timestamp);
     event UpdateMaxCap(address indexed caller, uint prevCap, uint newCap, uint timestamp);
-    event ClaimUnsolTokens(address indexed caller, address indexed destination, uint indexed timestamp);
+    event ClaimUnsoldTokens(address indexed caller, address indexed destination, uint indexed timestamp);
     event OpenTokenClaims(address indexed caller, uint indexed timestamp);
     event CloseTokenClaims(address indexed caller, uint indexed timestamp);
 
@@ -91,16 +86,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     modifier nonZeroAddress(address _account){
         require(_account != address(0),"Invalid Account");
-        _;
-    }
-
-    modifier isEligibleForRefund(address contributor){
-        require(hasClaimedRefund[contributor] == false,"Not eligible");
-        _;
-    }
-
-    modifier isNotEligibleForRefund(address contributor){
-        require(hasClaimedRefund[contributor] == true,"Refund Claimed Already");
         _;
     }
 
@@ -147,17 +132,17 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function activateTokenClaims() public onlyRole(MANAGER_ROLE){
         _setClaimStarted();
-        emit OpenTokenClaims(msg.sender, block.timestamp);
+        emit OpenTokenClaims(_msgSender(), block.timestamp);
     }
 
     function deactivateTokenClaims() public onlyRole(MANAGER_ROLE){
         _setClaimsClosed();
-        emit CloseTokenClaims(msg.sender, block.timestamp);
+        emit CloseTokenClaims(_msgSender(), block.timestamp);
     }
 
     function claimUnsoldTokens() public onlyRole(MANAGER_ROLE) presaleClosed nonReentrant{
-        _refundUnsoldTokens(msg.sender);
-        emit ClaimUnsolTokens(msg.sender, msg.sender, block.timestamp);
+        _refundUnsoldTokens(_msgSender());
+        emit ClaimUnsoldTokens(_msgSender(), msg.sender, block.timestamp);
     }
 
     function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) 
@@ -288,7 +273,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         if(isActiveInvestor[msg.sender] == false){
             totalInvestors = totalInvestors.add(1);
             investors.push(msg.sender);
-        }else{
             isActiveInvestor[msg.sender] = true;
         }
         canClaimTokens[msg.sender] = true;
