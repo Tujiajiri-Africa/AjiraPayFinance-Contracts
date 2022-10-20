@@ -33,7 +33,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public tokenDecimals = 18;
     uint public totalTokensSold = 0;
     uint public totalTokensClaimed = 0;
-    uint public pricePerToken = 10 * 10** 18;
+    uint public pricePerToken = 30 * 10** 18;
     uint public totalWeiRaised = 0;
 
     uint public maxTokenCapForPresale = 15_000_000 * 1e18;
@@ -126,7 +126,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
-        isPresaleOpen = true;
+        _setPresaleOpened();
         emit StartPresale(_msgSender(), block.timestamp);
     }
 
@@ -169,7 +169,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit UpdateTreasury(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
 
-    function contribute() public payable nonReentrant presaleOpen{
+    function contribute() public payable nonReentrant presaleOpen presaleUnpaused{
         _checkUserCoolDownBeforeNextPurchase(msg.sender);
         uint256 weiAmount = msg.value;
         require(weiAmount > 0, "No Amount Specified");
@@ -274,6 +274,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function _setClaimsClosed() private{
         isOpenForClaims = false;
+    }
+
+    function _setPresaleOpened() private{
+        isPresaleOpen = true;
     }
 
     function _setPresaleClosed() private{
