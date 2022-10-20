@@ -177,7 +177,9 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function claimContribution() public claimsOpen nonReentrant{
-        require(canClaimTokens[msg.sender] == true,"Already Claimed Contribution");
+        if(isActiveInvestor[msg.sender] == true && canClaimTokens[msg.sender] == false){
+            require(canClaimTokens[msg.sender] == true,"Already Claimed Contribution");
+        }
         uint256 totalClaimableTokens = totalTokenContributionsByUser[msg.sender];
         require(totalClaimableTokens > 0,"Insufficient Token Claims");
         require(
