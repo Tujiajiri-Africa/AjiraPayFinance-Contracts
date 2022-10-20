@@ -29,10 +29,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     bool public isOpenForClaims = false;
     
     uint public totalInvestors = 0;
-    uint public minTokensToPurchasePerWallet;
-    uint public maxTokensToPurchasePerWallet;
-    uint public maxBNBPerContributor = 30;
-    uint public minBNBPerUser = 10;
     uint public presaleDurationInSec;
     uint public tokenDecimals = 18;
     uint public totalTokensSold = 0;
@@ -41,6 +37,8 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalWeiRaised = 0;
 
     uint public maxTokenCapForPresale = 15_000_000 * 1e18;
+    uint public maxTokensToPurchasePerWallet = 2000_000 * 1e18;
+    uint public minTokensToPurchasePerWallet;
 
     uint public coolDown = (60 * 60 );
     
@@ -60,15 +58,17 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     mapping(address => uint) public lastUserBuyTimeInSec; //store user's cooldown time to 1 minute
 
-    event PresaleOpened(address indexed caller, uint indexed timestamp);
-    event PresaleClosed(address indexed caller, uint indexed timestamp);
-    event PresalePaused(address indexed caller, uint indexed timestamp);
-    event PresaleUnpaused(address indexed caller, uint indexed timestamp);
+    event StartPresale(address indexed caller, uint indexed timestamp);
+    event ClosePresale(address indexed caller, uint indexed timestamp);
+    event PausePresale(address indexed caller, uint indexed timestamp);
+    event UnpausePresale(address indexed caller, uint indexed timestamp);
     event Contribute(address indexed beneficiary, uint indexed weiAmount, uint indexed tokenAmountBought, uint timestamp);
     event Claim(address indexed beneficiary, uint indexed tokenAmountReceived, uint indexed timestamp);
-    event TreasuryUpdated(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
-    event BNBRecovered(address indexed caller, address indexed destinationWallet, uint indexed amount, uint timestamp);
-    event ERC20TokenRecovered(address indexed caller, address indexed destination, uint amount, uint timestamp);
+    event UpdateTreasury(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
+    event RecoverBNB(address indexed caller, address indexed destinationWallet, uint indexed amount, uint timestamp);
+    event RecoverERC20Tokens(address indexed caller, address indexed destination, uint amount, uint timestamp);
+    event UpdateMaxCap(address indexed caller, uint prevCap, uint newCap, uint timestamp);
+    event ClaimUnsolTokens(address indexed caller, address indexed destination, uint indexed timestamp);
 
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
@@ -128,22 +128,22 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
         isPresaleOpen = true;
-        emit PresaleOpened(_msgSender(), block.timestamp);
+        emit StartPresale(_msgSender(), block.timestamp);
     }
 
     function closePresale() public onlyRole(MANAGER_ROLE) presaleOpen{
         _setPresaleClosed();
-        emit PresaleClosed(_msgSender(), block.timestamp);
+        emit ClosePresale(_msgSender(), block.timestamp);
     }
 
     function pausePresale() public onlyRole(MANAGER_ROLE) presaleUnpaused{
         isPresalePaused = true;
-        emit PresalePaused(_msgSender(), block.timestamp);
+        emit PausePresale(_msgSender(), block.timestamp);
     }
 
     function unpausePresale() public onlyRole(MANAGER_ROLE) presalePaused{
         isPresalePaused = false;
-        emit PresaleUnpaused(_msgSender(), block.timestamp);
+        emit UnpausePresale(_msgSender(), block.timestamp);
     }
 
     function activateTokenClaims() public onlyRole(MANAGER_ROLE){
@@ -156,6 +156,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function claimUnsoldTokens() public onlyRole(MANAGER_ROLE) presaleClosed nonReentrant{
         _refundUnsoldTokens(msg.sender);
+        emit ClaimUnsolTokens(msg.sender, msg.sender, block.timestamp);
     }
 
     function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) 
@@ -164,26 +165,26 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     {
         address payable prevTreasury = treasury;
         treasury = _newTreasury;
-        emit TreasuryUpdated(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
+        emit UpdateTreasury(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
 
     function contribute() public payable nonReentrant presaleOpen{
         _checkUserCoolDownBeforeNextPurchase(msg.sender);
         uint256 weiAmount = msg.value;
         require(weiAmount > 0, "No Amount Specified");
-        // require(totalBNBInvestmentsByIUser[_msgSender()].add(weiAmount) <= 1,"Max User Cap Reached");
-        // require(msg.value.add(1) <= minUSDPricePerToken,"Minimum Contribution");
-        // require(msg.value.add(1) <= maxBNBPerContributor,"Maximum Contribution");
         (uint256 price, uint256 decimals) = _getLatestBNBPriceInUSD();
         uint256 usdAmountFromValue = weiAmount.mul(price).div(10 ** decimals);
         uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
+        uint256 totalTokensBoughtByUser = totalTokenContributionsByUser[msg.sender];
+        require(totalTokensBoughtByUser + tokenAmount <= maxTokensToPurchasePerWallet,"Max Tokens Per Wallet Reached");
+        require(tokenAmount < maxTokenCapForPresale,"Max Cap Reached");
         totalTokenContributionsByUser[msg.sender] = totalTokenContributionsByUser[msg.sender].add(tokenAmount);
         totalBNBInvestmentsByIUser[msg.sender] = totalBNBInvestmentsByIUser[msg.sender].add(weiAmount);
         totalTokensSold = totalTokensSold.add(tokenAmount);
         totalWeiRaised = totalWeiRaised.add(weiAmount);
         _updateInvestorCountAndStatus();
         _forwardFunds();
-         if(totalTokensSold > maxTokenCapForPresale){ //TODO multiply(totalTokensSold) by 10 ** 18
+         if(totalTokensSold > maxTokenCapForPresale){
              _setPresaleClosed();
         }
         emit Contribute(msg.sender, weiAmount, tokenAmount, block.timestamp);
@@ -199,6 +200,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         );
         totalTokenContributionsByUser[msg.sender] = 0;
         unchecked{
+            totalTokenContributionsClaimedByUser[msg.sender] = totalTokenContributionsClaimedByUser[msg.sender].add(totalClaimableTokens);
             totalTokensClaimed = totalTokensClaimed.add(totalClaimableTokens);
         }
         canClaimTokens[msg.sender] = false;
@@ -209,7 +211,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         uint256 balance = getContractBNBBalance();
         require(balance > 0,"Insufficient Contract Balance");
         treasury.transfer(balance);
-        emit BNBRecovered(msg.sender, treasury, balance, block.timestamp);
+        emit RecoverBNB(msg.sender, treasury, balance, block.timestamp);
     }
 
     function recoverLostTokensForInvestor(address _token, address _account, uint _amount) public 
@@ -217,7 +219,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         IERC20 token = IERC20(_token);
         require(token != ajiraPayToken,"Invalid Token");
         token.safeTransfer(_account, _amount);
-        emit ERC20TokenRecovered(_msgSender(), _account, _amount, block.timestamp);
+        emit RecoverERC20Tokens(_msgSender(), _account, _amount, block.timestamp);
     }
 
     function getContractTokenBalance() public view returns(uint256){
@@ -226,6 +228,14 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function getContractBNBBalance() public view returns(uint256){
         return address(this).balance;
+    }
+
+    function updateMaxTokenCapForPresale(uint256 _amount) public onlyRole(MANAGER_ROLE){
+        require(_amount > 15_000_000,"Max Cap Must be above 15% of total supply");
+        uint256 prevMaxCap = maxTokenCapForPresale;
+        uint256 newMaxCap = _amount * 1e18;
+        maxTokenCapForPresale = newMaxCap;
+        emit UpdateMaxCap(msg.sender, prevMaxCap, newMaxCap, block.timestamp);
     }
 
     receive() external payable{
@@ -246,7 +256,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     function _refundUnsoldTokens(address _destination) private{
         uint256 availableTokenBalance = getContractTokenBalance();
         uint256 refundableBalance = availableTokenBalance.sub(totalTokensSold);
-        require(refundableBalance >= availableTokenBalance,"Insufficient Token");
+        require(refundableBalance >= availableTokenBalance,"Insufficient Token Balance");
         require(ajiraPayToken.transfer(_destination, refundableBalance),"Failed To Refund Tokens");
     }
 
@@ -286,6 +296,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         assembly {
             id := chainid()
         }
-    return id;
+        return id;
     }
 }
