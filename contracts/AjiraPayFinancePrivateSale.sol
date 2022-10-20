@@ -39,16 +39,13 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public maxTokenCapForPresale = 15_000_000 * 1e18;
     uint public maxTokensToPurchasePerWallet = 2000_000 * 1e18;
     uint public minTokensToPurchasePerWallet;
-
-    uint public coolDown = (60 * 60 );
     
     uint private minUsdValuePerTokenDiviser = 400;
     uint public minUSDPricePerTokenFactor = 10000;
-    uint public minUSDPricePerToken = minUsdValuePerTokenDiviser.div(minUSDPricePerTokenFactor);
+    uint public minUSDPricePerToken = minUsdValuePerTokenDiviser.div(minUSDPricePerTokenFactor) * 1e18;
 
     mapping(address => uint) public totalTokenContributionsByUser;
     mapping(address => uint) public totalTokenContributionsClaimedByUser;
-    mapping(address => uint) public totalUnclaimedTokenContributionsByUser;
     mapping(address => uint) public totalBNBInvestmentsByIUser;
     mapping(address => bool) public hasClaimedRefund;
     mapping(address => bool) public canClaimTokens;
@@ -69,6 +66,8 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event RecoverERC20Tokens(address indexed caller, address indexed destination, uint amount, uint timestamp);
     event UpdateMaxCap(address indexed caller, uint prevCap, uint newCap, uint timestamp);
     event ClaimUnsolTokens(address indexed caller, address indexed destination, uint indexed timestamp);
+    event OpenTokenClaims(address indexed caller, uint indexed timestamp);
+    event CloseTokenClaims(address indexed caller, uint indexed timestamp);
 
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
@@ -148,10 +147,12 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function activateTokenClaims() public onlyRole(MANAGER_ROLE){
         _setClaimStarted();
+        emit OpenTokenClaims(msg.sender, block.timestamp);
     }
 
     function deactivateTokenClaims() public onlyRole(MANAGER_ROLE){
         _setClaimsClosed();
+        emit CloseTokenClaims(msg.sender, block.timestamp);
     }
 
     function claimUnsoldTokens() public onlyRole(MANAGER_ROLE) presaleClosed nonReentrant{
