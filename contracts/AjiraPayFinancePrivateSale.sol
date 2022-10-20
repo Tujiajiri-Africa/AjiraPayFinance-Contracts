@@ -244,7 +244,8 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     function _refundUnsoldTokens(address _destination) private{
         uint256 availableTokenBalance = getContractTokenBalance();
         uint256 refundableBalance = availableTokenBalance.sub(totalTokensSold);
-        require(refundableBalance <= availableTokenBalance,"Insufficient Token Balance");
+        require(refundableBalance > 0,"Insufficient Token Balance");
+        require(refundableBalance <= availableTokenBalance,"Excess Token Withdrawals");
         require(ajiraPayToken.transfer(_destination, refundableBalance),"Failed To Refund Tokens");
     }
 
