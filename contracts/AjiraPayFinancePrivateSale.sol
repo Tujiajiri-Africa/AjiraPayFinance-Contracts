@@ -33,7 +33,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public tokenDecimals = 18;
     uint public totalTokensSold = 0;
     uint public totalTokensClaimed = 0;
-    uint public pricePerToken = 30 * 10** 18;
+    uint public pricePerTokenInWei = 30 * 10** 18;
     uint public totalWeiRaised = 0;
 
     uint public maxTokenCapForPresale = 15_000_000 * 1e18;
@@ -156,11 +156,13 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function contribute() public payable nonReentrant presaleOpen presaleUnpaused{
         _checkUserCoolDownBeforeNextPurchase(msg.sender);
-        uint256 weiAmount = msg.value;
-        require(weiAmount > 0, "No Amount Specified");
         (uint256 price, uint256 decimals) = _getLatestBNBPriceInUSD();
+        uint256 weiAmount = msg.value;
         uint256 usdAmountFromValue = weiAmount.mul(price).div(10 ** decimals);
-        uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
+        require(weiAmount > 0, "No Amount Specified");
+        require(usdAmountFromValue >= (10 * 10**18),"Contribution Below Minimum");
+        require(usdAmountFromValue >= (10000 * 10**18),"Contribution Above Maximum");
+        uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerTokenInWei);
         uint256 totalTokensBoughtByUser = totalTokenContributionsByUser[msg.sender];
         require(totalTokensBoughtByUser + tokenAmount <= maxTokensToPurchasePerWallet,"Max Tokens Per Wallet Reached");
         require(tokenAmount < maxTokenCapForPresale,"Max Cap Reached");
