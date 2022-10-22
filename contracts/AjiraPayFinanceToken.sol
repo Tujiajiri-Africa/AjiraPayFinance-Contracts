@@ -432,9 +432,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{
       payable(treasury).transfer(halfBalance);
       
       uint256 leftOverBnb = address(this).balance - halfBalance;
-
-      uint256 buyBackTreasuryAmount = leftOverBnb * buyBackTreasuryPercent / 10000;
-      uint256 liquidityTreasuryAmount = leftOverBnb * liquidityTreasuryPercent / 10000;
+      
+      uint256 totalTreasury = buyBackTreasuryPercent + liquidityTreasuryPercent;
+      uint256 buyBackTreasuryAmount = leftOverBnb / totalTreasury * buyBackTreasuryPercent;
+      uint256 liquidityTreasuryAmount = leftOverBnb / totalTreasury * liquidityTreasuryPercent;
+      
       if(liquidityTreasuryAmount > 0){
           _addLiquidity(otherHalf, liquidityTreasuryAmount);
       }
