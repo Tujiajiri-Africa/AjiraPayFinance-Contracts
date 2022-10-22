@@ -4,6 +4,7 @@ import '@openzeppelin/contracts/access/Ownable.sol';
 import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/access/AccessControl.sol';
+import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 
 interface IPancakeswapV2Factory {
     event PairCreated(address indexed token0, address indexed token1, address pair, uint);
@@ -195,7 +196,7 @@ interface IPancakeRouter02 is IPancakeRouter01 {
     ) external;
 }
 
-contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ 
+contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{ 
     uint256 private _totalSupply = 200_000_000 * 1e18;
     string private _name = 'Ajira Pay Finance';
     string private _symbol = 'AJP';
@@ -287,13 +288,13 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{
             super.supportsInterface(interfaceId);
     }
 
-    function recoverBNB(uint _amount) public onlyRole(MANAGER_ROLE){ //nonReentrant
+    function recoverBNB(uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
         uint256 currentBalance = address(this).balance;
         require(_amount >= currentBalance,"Insufficient Balance");
         treasury.transfer(_amount);
     }
 
-    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) { //nonReentrant
+    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant { //nonReentrant
         require(_token != address(this), "Invalid Token Address");
         IERC20(_token).transfer(msg.sender, _amount);
     }
@@ -315,6 +316,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{
 
     function setDeductionFeePercentages(uint256 _txFee, uint256 _liquidityFee, uint256 _buyFee, uint256 _sellFee) 
     public 
+    nonReentrant
     onlyRole(MANAGER_ROLE)
     {
         uint256 feeTotals = _txFee + _liquidityFee + _buyFee + _sellFee;
@@ -325,9 +327,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{
         sellFee = _sellFee;
     }
 
-    function setTreasuryPercentages(uint256 _liquidity, uint256 _buyBack) public onlyRole(MANAGER_ROLE){
+    function setTreasuryPercentages(uint256 _liquidity, uint256 _buyBack) public onlyRole(MANAGER_ROLE) nonReentrant{
         uint256 totalTreasuryAmount = _liquidity + _buyBack;
-        require(totalTreasuryAmount <= 1000,"Total Cannot exceed 100%");
+        require(totalTreasuryAmount <= 1000,"Total Cannot exceed 10%");
         liquidityTreasuryPercent = _liquidity;
         buyBackTreasuryPercent = _buyBack;
     }
@@ -344,7 +346,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{
         _isExcludedFromFee[_beneficiary] = false;
     }
 
-    function setMaxTransactionAmount(uint _amount) external onlyRole(MANAGER_ROLE){
+    function setMaxTransactionAmount(uint _amount) external onlyRole(MANAGER_ROLE) nonReentrant{
         require(_amount > 0,"Zero Amt");
         require(_amount < (_totalSupply /100));
         maxTransactionAmount = _amount;
@@ -358,7 +360,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{
         isInTaxHoliday = false;
     }
 
-    function burn(address _account, uint _amount) public onlyRole(MANAGER_ROLE){
+    function burn(address _account, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
         require(_account != address(0), "Invalid Address");
         uint256 accountBalance = _balances[_account];
         require(accountBalance >= _amount, "Insufficient Balance");
