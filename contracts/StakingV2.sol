@@ -247,6 +247,10 @@ contract SpiExtStaking is IERC900 {
         createStake(msg.sender, _amount, defaultLockInDuration, _data);
     }
 
+    function totalStaked() external view override returns (uint256){
+        return _totalStaked;
+    }
+
     /**
      * @notice Stakes a certain amount of tokens, this MUST transfer the given amount from the caller
        * @notice MUST trigger Staked event
