@@ -228,7 +228,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
     
     event SwapAndLiquify(uint256 tokensSwapped,uint256 ethReceived,uint256 tokensIntoLiqudity);
     event Burn(address indexed from, address indexed to, uint indexed amount, uint timestamp);
-
+    
     modifier lockTheSwap {
         inSwapAndLiquify = true;
         _;
@@ -346,10 +346,10 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         _isExcludedFromFee[_beneficiary] = false;
     }
 
-    function setMaxTransactionAmount(uint _amount) external onlyRole(MANAGER_ROLE) nonReentrant{
+    function setMaxTransactionAmount(uint _amount) external onlyRole(MANAGER_ROLE){
         require(_amount > 0,"Zero Amt");
         require(_amount < (_totalSupply /100));
-        maxTransactionAmount = _amount;
+        maxTransactionAmount = _amount * 1e18;
     }
 
     function activateTaxHoliday() public onlyRole(MANAGER_ROLE) {
@@ -360,7 +360,12 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         isInTaxHoliday = false;
     }
 
-    function burn(address _account, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
+    function updateMinTokensToLiquify(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
+        require(_amount > 0, "Invalid Liquidity Amount");
+        minLiquidityAmount = _amount * 1e18;
+    }
+
+    function burn(address _account, uint _amount) public onlyRole(MANAGER_ROLE){
         require(_account != address(0), "Invalid Address");
         uint256 accountBalance = _balances[_account];
         require(accountBalance >= _amount, "Insufficient Balance");
