@@ -89,7 +89,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
-    constructor(address _token, uint _minRewardCap, uint _maxRewardCap, uint _tokenDecimals){
+    constructor(address _token, address payable _treasury, uint _minRewardCap, uint _maxRewardCap, uint _tokenDecimals){
         require(_tokenDecimals > 0 && _tokenDecimals <= 18,"Invalid Decimals");
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
         _grantRole(MANAGER_ROLE, _msgSender());
@@ -100,8 +100,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         minRewardCapPerUser = _minRewardCap.mul(10 ** tokenDecimals);
         maxRewardCapPerUser = _maxRewardCap.mul(10 ** tokenDecimals);
         
-
-        treasury = payable(_msgSender());
+        treasury = _treasury;
         totalRewardsClaimed = 0;
         totalRewardsToBeClaimed = 0;
     }
@@ -207,9 +206,9 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function recoverLostTokensForInvestor(address _token, address _account, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant nonZeroAddress(_account){
-        require(_token != address(rewardToken),"Invalid Token");
         require(_amount > 0, "Invalid Amount");
         IERC20 token = IERC20(_token);
+        require(token != rewardToken,"Invalid Token");
         token.safeTransfer(_account, _amount);
         emit ERC20Recovered(_msgSender(), _account, _amount, token, block.timestamp);
     }
@@ -222,15 +221,17 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function recoverUnclaimedTokens() public onlyRole(MANAGER_ROLE) isActive claimClosed{
-        uint256 unclaimedBalance = _getRewardDistributorBalance();
-        require(rewardToken.transfer(treasury, unclaimedBalance),"Total Claims Failed");
+        uint256 contractTokenBalance = _getRewardDistributorBalance();
+        uint256 claimableBalance = contractTokenBalance.sub(totalRewardsToBeClaimed);
+        require(claimableBalance > 0,"Insufficient Claimable Balance");
+        require(rewardToken.transfer(treasury, claimableBalance),"Total Claims Failed");
         emit ClaimBackUnClaimedTokens(_msgSender(), treasury, unclaimedBalance, block.timestamp);
     }
 
-    function updateTreasury(address _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury){
+    function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury){
         if(payable(_newTreasury) == treasury){ return;}
         address payable prevTreasury = treasury;
-        treasury = payable(_newTreasury);
+        treasury = _newTreasury;
         emit TreasuryUpdated(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
 
