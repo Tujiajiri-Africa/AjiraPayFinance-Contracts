@@ -32,7 +32,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     
     uint public totalInvestors = 0;
     uint public presaleDurationInSec;
-    uint public tokenDecimals = 18;
     uint public totalTokensSold = 0;
     uint public totalTokensClaimed = 0;
     uint public publicSalePricePerTokenInWei = 30 * 10** 18; //0.3
@@ -194,6 +193,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _updateInvestorCountAndStatus();
         _forwardFunds();
         _updatePresalePhaseParams(tokenAmount, weiAmount);
+        _checkAndUpdatePresalePhaseByTokensSold();
         _checkPresaleEndStatus();
         emit Contribute(msg.sender, weiAmount, tokenAmount, block.timestamp);
     }
@@ -301,6 +301,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         isPresaleOpen = false;
     }
 
+    function _activatePublicSale() private{
+        isPrivateSalePhase = false;
+    }
+
     function _updateInvestorCountAndStatus() private{
         if(isActiveInvestor[msg.sender] == false){
             totalInvestors = totalInvestors.add(1);
@@ -310,6 +314,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         canClaimTokens[msg.sender] = true;
         nextPossiblePurchaseTimeByUser[msg.sender] = block.timestamp.add(120); //2mins
         lastUserBuyTimeInSec[msg.sender] = block.timestamp;
+        
     }
 
     function _updatePresalePhaseParams(uint256 _tokenAmount, uint256 _weiAmount) private{
@@ -352,6 +357,12 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         unchecked{
             totalTokenContributionsClaimedByUser[msg.sender] = totalTokenContributionsClaimedByUser[msg.sender].add(_tokenAmount);
             totalTokensClaimed = totalTokensClaimed.add(_tokenAmount);
+        }
+    }
+
+    function _checkAndUpdatePresalePhaseByTokensSold() private{
+        if(totalTokensSold >= maxTokenCapForPresale.div(2)){
+            _activatePublicSale();
         }
     }
 
