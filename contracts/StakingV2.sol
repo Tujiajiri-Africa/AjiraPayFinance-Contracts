@@ -26,7 +26,7 @@ interface IERC900 {
 
 // OpenZeppelin Contracts (last updated v4.6.0) (token/ERC20/IERC20.sol)
 
-pragma solidity ^0.8.9;
+pragma solidity =0.8.4;
 
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
@@ -110,7 +110,7 @@ interface IERC20 {
 
 
 
-pragma solidity ^0.8.9;
+pragma solidity =0.8.4;
 
 
 
@@ -131,7 +131,7 @@ contract SpiExtStaking is IERC900 {
 
     Income[] public incomes;
 
-    uint256 public totalStaked;
+    uint256 public _totalStaked;
 
     // Struct for personal stakes (i.e., stakes made by this address)
     // unlockedTimestamp - when the stake unlocks (in seconds since Unix epoch)
@@ -350,7 +350,7 @@ contract SpiExtStaking is IERC900 {
         stakeHolders[_address].totalStakedFor += _amount;
         stakeHolders[_address].personalStakes.push(Stake(block.timestamp + _lockInDuration,_amount,_address));
 
-        totalStaked +=_amount;
+        _totalStaked +=_amount;
 
         emit Staked(_address,_amount,totalStakedFor(_address),_data);
     }
@@ -382,7 +382,7 @@ contract SpiExtStaking is IERC900 {
         personalStake.actualAmount = 0;
         stakeHolders[msg.sender].personalStakeIndex++;
 
-        totalStaked -=_amount;
+        _totalStaked -=_amount;
 
         emit Unstaked(personalStake.stakedFor,_amount,totalStakedFor(personalStake.stakedFor),_data);
     }
