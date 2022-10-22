@@ -37,6 +37,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalTokensClaimed = 0;
     uint public publicSalePricePerTokenInWei = 30 * 10** 18; //0.3
     uint public privateSalePricePerTokenInWei = 20 * 10 ** 18; //0.2
+    uint public maxPossibleInvestmentInWei = 10000 * 10**18;
     uint public totalWeiRaised = 0;
     uint public totalTokensSoldInPublicSale = 0;
     uint public totalTokensSoldInPrivateSale = 0;
@@ -71,6 +72,8 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event OpenTokenClaims(address indexed caller, uint indexed timestamp);
     event CloseTokenClaims(address indexed caller, uint indexed timestamp);
     event OpenPublicSale(address indexed caller, uint indexed timestamp);
+    event UpdatePrivateSalePrice(address indexed caller, uint indexed amount, uint indexed timestamp);
+    event UpdatePublisSalePrice(address indexed caller, uint indexed amount, uint indexed timestamp);
 
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
@@ -168,18 +171,18 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function contribute() public payable nonReentrant presaleOpen presaleUnpaused{
-        _checkUserCoolDownBeforeNextPurchase(msg.sender);
+        _checkInvestorCoolDownBeforeNextPurchase(msg.sender);
         uint256 pricePerToken = _getTokenPriceByPhase();
         (uint256 price, uint256 decimals) = _getLatestBNBPriceInUSD();
         uint256 weiAmount = msg.value;
         uint256 usdAmountFromValue = weiAmount.mul(price).div(10 ** decimals);
         require(weiAmount > 0, "No Amount Specified");
         if(isPrivateSalePhase){
-            require(usdAmountFromValue >= (20 * 10**18),"Contribution Below Minimum");
+            require(usdAmountFromValue >= privateSalePricePerTokenInWei,"Contribution Below Minimum");
         }else{
-            require(usdAmountFromValue >= (30 * 10**18),"Contribution Below Minimum");
+            require(usdAmountFromValue >= publicSalePricePerTokenInWei,"Contribution Below Minimum");
         }
-        require(usdAmountFromValue >= (10000 * 10**18),"Contribution Above Maximum");
+        require(usdAmountFromValue >= maxPossibleInvestmentInWei,"Contribution Above Maximum");
         uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
         uint256 totalTokensBoughtByUser = totalTokenContributionsByUser[msg.sender];
         require(totalTokensBoughtByUser + tokenAmount <= maxTokensToPurchasePerWallet,"Max Tokens Per Wallet Reached");
@@ -204,10 +207,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
             "Failed to send tokens"
         );
         totalTokenContributionsByUser[msg.sender] = 0;
-        unchecked{
-            totalTokenContributionsClaimedByUser[msg.sender] = totalTokenContributionsClaimedByUser[msg.sender].add(totalClaimableTokens);
-            totalTokensClaimed = totalTokensClaimed.add(totalClaimableTokens);
-        }
+        _updateInvestorContribution(totalClaimableTokens);
         canClaimTokens[msg.sender] = false;
         emit Claim(msg.sender, totalClaimableTokens, block.timestamp);
     }
@@ -243,6 +243,18 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit UpdateMaxCap(msg.sender, prevMaxCap, newMaxCap, block.timestamp);
     }
 
+    function setPublicSalePriceInWei(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
+        require(_amount > 20 && _amount < 30,"Invalid Price: Between 0.2$ - 0.3$");
+        publicSalePricePerTokenInWei = _amount * 10 ** 18;
+        emit UpdatePublisSalePrice(msg.sender, _amount, block.timestamp);
+    }
+
+    function setPrivateSalePriceInWei(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
+        require(_amount > 30 && _amount < 40,"Invalid Price: Between 0.3$ - 0.4$");
+        privateSalePricePerTokenInWei = _amount * 10 ** 18;
+        emit UpdatePrivateSalePrice(msg.sender, _amount, block.timestamp);
+    }
+
     receive() external payable{
         contribute();
     }
@@ -266,7 +278,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         require(ajiraPayToken.transfer(_destination, refundableBalance),"Failed To Refund Tokens");
     }
 
-    function _checkUserCoolDownBeforeNextPurchase(address _account) private view{
+    function _checkInvestorCoolDownBeforeNextPurchase(address _account) private view{
         uint256 nextPurchaseTime = nextPossiblePurchaseTimeByUser[_account];
         if(block.timestamp < nextPurchaseTime){
             require(block.timestamp >= nextPurchaseTime,"Wait For 2 Mins Before Next Purchase");
@@ -336,6 +348,13 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         }
     }
     
+    function _updateInvestorContribution(uint256 _tokenAmount) private{
+        unchecked{
+            totalTokenContributionsClaimedByUser[msg.sender] = totalTokenContributionsClaimedByUser[msg.sender].add(_tokenAmount);
+            totalTokensClaimed = totalTokensClaimed.add(_tokenAmount);
+        }
+    }
+
     function _getChainID() private view returns (uint256) {
         uint256 id;
         assembly {
