@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // File: contracts/IERC900.sol
 
-pragma solidity ^0.8.9;
+pragma solidity =0.8.4;
 
 interface IERC900 {
 
