@@ -455,11 +455,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         path[1] = pancakeswapV2Router.WETH();
         _approve(address(this), address(pancakeswapV2Router), _tokenAmount);
         pancakeswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
-        _tokenAmount,
-        0, // accept any amount of BNB
-        path,
-        address(this),
-        block.timestamp
+            _tokenAmount,
+            0, // accept any amount of BNB
+            path,
+            address(this),
+            block.timestamp
         );
     }
 
@@ -484,7 +484,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
             0, // accept any amount of Tokens
             path,
             DEAD, // Burn address
-            block.timestamp + 300
+            block.timestamp
         );    
     }
 
