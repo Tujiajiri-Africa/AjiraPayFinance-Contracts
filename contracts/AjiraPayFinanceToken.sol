@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.4;
 import '@openzeppelin/contracts/access/Ownable.sol';
-//import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/access/AccessControl.sol';
-import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 
 interface IPancakeswapV2Factory {
     event PairCreated(address indexed token0, address indexed token1, address pair, uint);
@@ -198,9 +195,7 @@ interface IPancakeRouter02 is IPancakeRouter01 {
     ) external;
 }
 
-contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGuard
-    using SafeERC20 for IERC20;
-
+contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ 
     uint256 private _totalSupply = 200_000_000 * 1e18;
     string private _name = 'Ajira Pay Finance';
     string private _symbol = 'AJP';
@@ -228,6 +223,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGua
     uint256 public maxTransactionAmount;
     uint256 private liquidityTreasuryPercent;
     uint256 private buyBackTreasuryPercent;
+    uint256 private devTreasuryPercent;
     
     event SwapAndLiquify(uint256 tokensSwapped,uint256 ethReceived,uint256 tokensIntoLiqudity);
     event Burn(address indexed from, address indexed to, uint indexed amount, uint timestamp);
@@ -263,11 +259,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGua
         txFee = 200;//2%
         liquidityFee = 100;//1%
 
-        liquidityTreasuryPercent = 700; //7%
+        liquidityTreasuryPercent = 400; //4%
         buyBackTreasuryPercent = 300;//3%
     
-        minLiquidityAmount = _totalSupply / 1000 / 4; //50_000
-        maxTransactionAmount = _totalSupply / 200 ; //1000_000
+        minLiquidityAmount = 50_000 * 1e18;
+        maxTransactionAmount = 1_000_000 * 1e18;
 
         _balances[msg.sender] += _totalSupply;
         emit Transfer(address(0), msg.sender, _totalSupply);
@@ -299,7 +295,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGua
 
     function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) { //nonReentrant
         require(_token != address(this), "Invalid Token Address");
-        IERC20(_token).safeTransfer(msg.sender, _amount);
+        IERC20(_token).transfer(msg.sender, _amount);
     }
     
     function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE){
@@ -322,7 +318,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGua
     onlyRole(MANAGER_ROLE)
     {
         uint256 feeTotals = _txFee + _liquidityFee + _buyFee + _sellFee;
-        require(feeTotals <= 1000,"Fees Cannot Exceed 100%");
+        require(feeTotals <= 1000,"Fees Cannot Exceed 10%");
         txFee = _txFee;
         liquidityFee = _liquidityFee;
         buyFee = _buyFee;
@@ -350,7 +346,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGua
 
     function setMaxTransactionAmount(uint _amount) external onlyRole(MANAGER_ROLE){
         require(_amount > 0,"Zero Amt");
-        require(_amount < (_totalSupply /100)); //TODO Check proper calculations here
+        require(_amount < (_totalSupply /100));
         maxTransactionAmount = _amount;
     }
 
@@ -439,9 +435,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGua
 
       uint256 buyBackTreasuryAmount = leftOverBnb * buyBackTreasuryPercent / 10000;
       uint256 liquidityTreasuryAmount = leftOverBnb * liquidityTreasuryPercent / 10000;
-
-      _addLiquidity(otherHalf, liquidityTreasuryAmount);
-
+      if(liquidityTreasuryAmount > 0){
+          _addLiquidity(otherHalf, liquidityTreasuryAmount);
+      }
       if(buyBackTreasuryAmount > 0){
         _buyBackAndBurnTokens(buyBackTreasuryAmount);
       }
@@ -470,7 +466,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl{ //ReentrancyGua
             _tokenAmount,
             0, // slippage is unavoidable
             0, // slippage is unavoidable
-            owner(),//TODO replace with DEAD address
+            DEAD,
             block.timestamp
         );
     }
