@@ -27,14 +27,21 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     bool public isPresaleOpen = false;
     bool public isPresalePaused = false;
     bool public isOpenForClaims = false;
+
+    bool public isPrivateSalePhase = true;
     
     uint public totalInvestors = 0;
     uint public presaleDurationInSec;
     uint public tokenDecimals = 18;
     uint public totalTokensSold = 0;
     uint public totalTokensClaimed = 0;
-    uint public pricePerTokenInWei = 30 * 10** 18;
+    uint public publicSalePricePerTokenInWei = 30 * 10** 18; //0.3
+    uint public privateSalePricePerTokenInWei = 20 * 10 ** 18; //0.2
     uint public totalWeiRaised = 0;
+    uint public totalTokensSoldInPublicSale = 0;
+    uint public totalTokensSoldInPrivateSale = 0;
+    uint public totalWeiRaisedInPublicSale = 0;
+    uint public totalWeiRaisedInPrivateSale = 0;
 
     uint public maxTokenCapForPresale = 15_000_000 * 1e18;
     uint public maxTokensToPurchasePerWallet = 2000_000 * 1e18;
@@ -63,6 +70,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event ClaimUnsoldTokens(address indexed caller, address indexed destination, uint indexed timestamp);
     event OpenTokenClaims(address indexed caller, uint indexed timestamp);
     event CloseTokenClaims(address indexed caller, uint indexed timestamp);
+    event OpenPublicSale(address indexed caller, uint indexed timestamp);
 
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
@@ -140,6 +148,11 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit CloseTokenClaims(_msgSender(), block.timestamp);
     }
 
+    function activatePublicSale() public onlyRole(MANAGER_ROLE){
+        isPrivateSalePhase = false;
+        emit OpenPublicSale(msg.sender, block.timestamp);
+    }
+
     function claimUnsoldTokens() public onlyRole(MANAGER_ROLE) presaleClosed nonReentrant{
         _refundUnsoldTokens(_msgSender());
         emit ClaimUnsoldTokens(_msgSender(), msg.sender, block.timestamp);
@@ -156,13 +169,18 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function contribute() public payable nonReentrant presaleOpen presaleUnpaused{
         _checkUserCoolDownBeforeNextPurchase(msg.sender);
+        uint256 pricePerToken = _getTokenPriceByPhase();
         (uint256 price, uint256 decimals) = _getLatestBNBPriceInUSD();
         uint256 weiAmount = msg.value;
         uint256 usdAmountFromValue = weiAmount.mul(price).div(10 ** decimals);
         require(weiAmount > 0, "No Amount Specified");
-        require(usdAmountFromValue >= (10 * 10**18),"Contribution Below Minimum");
+        if(isPrivateSalePhase){
+            require(usdAmountFromValue >= (20 * 10**18),"Contribution Below Minimum");
+        }else{
+            require(usdAmountFromValue >= (30 * 10**18),"Contribution Below Minimum");
+        }
         require(usdAmountFromValue >= (10000 * 10**18),"Contribution Above Maximum");
-        uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerTokenInWei);
+        uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
         uint256 totalTokensBoughtByUser = totalTokenContributionsByUser[msg.sender];
         require(totalTokensBoughtByUser + tokenAmount <= maxTokensToPurchasePerWallet,"Max Tokens Per Wallet Reached");
         require(tokenAmount < maxTokenCapForPresale,"Max Cap Reached");
@@ -172,16 +190,13 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         totalWeiRaised = totalWeiRaised.add(weiAmount);
         _updateInvestorCountAndStatus();
         _forwardFunds();
-         if(totalTokensSold > maxTokenCapForPresale){
-             _setPresaleClosed();
-        }
+        _updatePresalePhaseParams(tokenAmount, weiAmount);
+        _checkPresaleEndStatus();
         emit Contribute(msg.sender, weiAmount, tokenAmount, block.timestamp);
     }
 
     function claimContribution() public claimsOpen nonReentrant{
-        if(isActiveInvestor[msg.sender] == true && canClaimTokens[msg.sender] == false){
-            require(canClaimTokens[msg.sender] == true,"Already Claimed Contribution");
-        }
+        _checkIfCallerIsActiveInvestor();
         uint256 totalClaimableTokens = totalTokenContributionsByUser[msg.sender];
         require(totalClaimableTokens > 0,"Insufficient Token Claims");
         require(
@@ -285,6 +300,42 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         lastUserBuyTimeInSec[msg.sender] = block.timestamp;
     }
 
+    function _updatePresalePhaseParams(uint256 _tokenAmount, uint256 _weiAmount) private{
+        if(isPrivateSalePhase){
+            unchecked{
+                totalTokensSoldInPrivateSale = totalTokensSoldInPrivateSale.add(_tokenAmount);
+                totalWeiRaisedInPrivateSale = totalWeiRaisedInPrivateSale.add(_weiAmount);
+            }
+        }else{
+            unchecked{
+                totalTokensSoldInPublicSale = totalTokensSoldInPublicSale.add(_tokenAmount);
+                totalWeiRaisedInPublicSale = totalWeiRaisedInPublicSale.add(_weiAmount);
+            }
+        }
+    }
+
+    function _checkPresaleEndStatus() private{
+        if(totalTokensSold > maxTokenCapForPresale){
+             _setPresaleClosed();
+        }
+    }
+
+    function _getTokenPriceByPhase() private view returns(uint256){
+        uint256 _tokenPriceInWeiBySalePhase;
+         if(isPrivateSalePhase){
+            _tokenPriceInWeiBySalePhase = privateSalePricePerTokenInWei;
+        }else{
+            _tokenPriceInWeiBySalePhase = publicSalePricePerTokenInWei;
+        }
+        return _tokenPriceInWeiBySalePhase;
+    }
+
+    function _checkIfCallerIsActiveInvestor() private view{
+        if(isActiveInvestor[msg.sender] == true && canClaimTokens[msg.sender] == false){
+            require(canClaimTokens[msg.sender] == true,"Already Claimed Contribution");
+        }
+    }
+    
     function _getChainID() private view returns (uint256) {
         uint256 id;
         assembly {
