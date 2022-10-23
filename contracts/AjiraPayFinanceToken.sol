@@ -290,7 +290,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
 
     function recoverBNB(uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
         uint256 currentBalance = address(this).balance;
-        require(_amount >= currentBalance,"Insufficient Balance");
+        require(_amount <= currentBalance,"Insufficient Balance");
         treasury.transfer(_amount);
     }
 
@@ -407,9 +407,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
             }
 
             bool takeFee = true;
-            _isExcludedFromFee[_sender] ? takeFee = false : takeFee = true;
-            _isExcludedFromFee[_recipient] ? takeFee = false : takeFee = true;
-            isInTaxHoliday ? takeFee = false: takeFee = true;
+            _isExcludedFromFee[_sender] == true ? takeFee = false : takeFee = true;
+            isInTaxHoliday == true ? takeFee = false: takeFee = true;
 
             _transferStandard(_sender,_recipient,_amount,takeFee); 
     }

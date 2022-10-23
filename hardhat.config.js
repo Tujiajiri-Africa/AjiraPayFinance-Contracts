@@ -43,9 +43,10 @@ module.exports = {
       url: "https://bsc-dataseed.binance.org/",
       chainId: 56,
       gas:600000000000,
-      gasPrice: 600000000000,
-      gasLimit: 600000000000,
-      accounts: [PRIVATE_KEY]
+      //gasPrice: 600000000000,
+      //gasLimit: 600000000000,
+      accounts: [PRIVATE_KEY],
+      allowUnlimitedContractSize: true
       // accounts: {
       //   mnemonic: mnemonic
       // }
@@ -79,7 +80,8 @@ module.exports = {
 
   etherscan: {
     apiKey: {
-      bscTestnet: BSCSCAN_API_KEY
+      bscTestnet: BSCSCAN_API_KEY,
+      bsc: BSCSCAN_API_KEY
     }
   }
 };
