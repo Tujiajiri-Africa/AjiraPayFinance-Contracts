@@ -7,8 +7,7 @@
 const hre = require("hardhat");
 
 async function main() {
-
-  const pancakeswapTestnetRouter = '0x6725F303b657a9451d8BA641348b6761A6CC7a17';
+  const pancakeswapTestnetRouter = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1';
   const pancakeswapMainnetRouter = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
   const ajiraPayTreasury = '0x4F6c0B945D00f55B6D5a7cEd1eCAA0690675527A';
 
@@ -35,7 +34,7 @@ async function main() {
 
   console.log("Ajira Pay Finance Presale Contract deployed to:", ajiraPayPresaleContract.address);
 
-  const ajiraPayAirdropDristributor = await AjiraPayAirdropDristributor.deploy(ajiraPayFinanceToken.address,minRewarCap,maxRewardCap,tokenDecimals);
+  const ajiraPayAirdropDristributor = await AjiraPayAirdropDristributor.deploy(ajiraPayFinanceToken.address,ajiraPayTreasury,minRewarCap,maxRewardCap,tokenDecimals);
 
   await ajiraPayAirdropDristributor.deployed();
 
