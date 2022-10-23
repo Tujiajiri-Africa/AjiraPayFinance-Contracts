@@ -225,7 +225,7 @@ contract AjiraPayAirdropDistributor is Ownable, AccessControl, ReentrancyGuard{
         uint256 claimableBalance = contractTokenBalance.sub(totalRewardsToBeClaimed);
         require(claimableBalance > 0,"Insufficient Claimable Balance");
         require(rewardToken.transfer(treasury, claimableBalance),"Total Claims Failed");
-        emit ClaimBackUnClaimedTokens(_msgSender(), treasury, unclaimedBalance, block.timestamp);
+        emit ClaimBackUnClaimedTokens(_msgSender(), treasury, claimableBalance, block.timestamp);
     }
 
     function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) nonZeroAddress(_newTreasury){
