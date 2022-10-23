@@ -16,7 +16,7 @@ async function main() {
 
   await ajiraPayAirdropDristributor.deployed();
 
-  console.log("Ajira Pay deployed to:", ajiraPayAirdropDristributor.address);
+  console.log("Ajira Pay Airdrop deployed to:", ajiraPayAirdropDristributor.address);
 }
 
 // We recommend this pattern to be able to use async/await everywhere
