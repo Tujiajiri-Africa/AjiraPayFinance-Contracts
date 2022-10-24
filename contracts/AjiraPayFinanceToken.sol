@@ -211,6 +211,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
     bool public isInTaxHoliday = false;
+    bool public isTransferFeeActive = true;
 
     mapping(address => bool) public _isExcludedFromFee;
     mapping(address => uint256) private _balances;
@@ -290,11 +291,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
 
     function recoverBNB(uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
         uint256 currentBalance = address(this).balance;
-        require(_amount <= currentBalance,"Insufficient Balance");
+        require(currentBalance >= _amount,"Insufficient Balance");
         treasury.transfer(_amount);
     }
 
-    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant { //nonReentrant
+    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE){
         require(_token != address(this), "Invalid Token Address");
         IERC20(_token).transfer(msg.sender, _amount);
     }
@@ -316,7 +317,6 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
 
     function setDeductionFeePercentages(uint256 _txFee, uint256 _liquidityFee, uint256 _buyFee, uint256 _sellFee) 
     public 
-    nonReentrant
     onlyRole(MANAGER_ROLE)
     {
         uint256 feeTotals = _txFee + _liquidityFee + _buyFee + _sellFee;
@@ -327,15 +327,19 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         sellFee = _sellFee;
     }
 
-    function setTreasuryPercentages(uint256 _liquidity, uint256 _buyBack) public onlyRole(MANAGER_ROLE) nonReentrant{
+    function setTreasuryPercentages(uint256 _liquidity, uint256 _buyBack) public onlyRole(MANAGER_ROLE){
         uint256 totalTreasuryAmount = _liquidity + _buyBack;
-        require(totalTreasuryAmount <= 1000,"Total Cannot exceed 10%");
+        require(totalTreasuryAmount <= 10000,"Total Cannot exceed 100%");
         liquidityTreasuryPercent = _liquidity;
         buyBackTreasuryPercent = _buyBack;
     }
 
     function setSwapAndLiquifyEnabled() external onlyRole(MANAGER_ROLE){
         swapAndLiquifyEnabled = true;
+    }
+
+    function disableSwap() external onlyRole(MANAGER_ROLE){
+        swapAndLiquifyEnabled = false;
     }
 
     function excludeFromFee(address _beneficiary) public onlyRole(MANAGER_ROLE){
@@ -358,6 +362,14 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
 
     function deActivateTaxHoliday() public onlyRole(MANAGER_ROLE) {
         isInTaxHoliday = false;
+    }
+
+    function enableTransferFees() public onlyRole(MANAGER_ROLE){
+        isTransferFeeActive = true;
+    }
+
+    function disableTransferFees() public onlyRole(MANAGER_ROLE){
+        isTransferFeeActive = false;
     }
 
     function updateMinTokensToLiquify(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
@@ -418,10 +430,9 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         uint256 amountReceived = (_shouldTakeFee) ? _takeTaxes(_sender, _recipient, _amount) : _amount;
         _balances[_recipient] += amountReceived;
 
-        (,uint256 txFeeAmount,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
+        (, ,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
         _takeLiquidity(liquidityFeeAmount);
-        _takeFee(txFeeAmount);
-        
+
         emit Transfer(_sender, _recipient, amountReceived);
     }
 
@@ -437,7 +448,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
       uint256 halfBalance = newBalance / 2;
       payable(treasury).transfer(halfBalance);
       
-      uint256 leftOverBnb = address(this).balance - halfBalance;
+      uint256 leftOverBnb = newBalance - halfBalance;
       
       uint256 totalTreasury = buyBackTreasuryPercent + liquidityTreasuryPercent;
       uint256 buyBackTreasuryAmount = leftOverBnb / totalTreasury * buyBackTreasuryPercent;
@@ -474,7 +485,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
             _tokenAmount,
             0, // slippage is unavoidable
             0, // slippage is unavoidable
-            DEAD,
+            owner(),
             block.timestamp
         );
     }
@@ -511,10 +522,6 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         _balances[address(this)] += _liquidityFeeAmount;
     }
 
-    function _takeFee(uint256 _taxFeeAmount) private{
-        _balances[address(this)] += _taxFeeAmount;
-    }
-
     function _takeTaxes(address from, address to, uint256 amount) private returns (uint256) {
         uint256 currentFee;
         if (from == pancakeswapV2Pair) {
@@ -522,7 +529,11 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         } else if (to == pancakeswapV2Pair) {
             currentFee = sellFee;
         } else {
-            currentFee = txFee;
+            if(isTransferFeeActive){
+                currentFee = txFee;
+            }else{
+                currentFee = 0;
+            }
         }
 
         uint256 feeAmount = amount * currentFee / 10000;

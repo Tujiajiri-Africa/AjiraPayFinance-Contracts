@@ -181,7 +181,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         }else{
             require(usdAmountFromValue >= publicSalePricePerTokenInWei,"Contribution Below Minimum");
         }
-        require(usdAmountFromValue >= maxPossibleInvestmentInWei,"Contribution Above Maximum");
+        require(usdAmountFromValue <= maxPossibleInvestmentInWei,"Contribution Above Maximum");
         uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
         uint256 totalTokensBoughtByUser = totalTokenContributionsByUser[msg.sender];
         require(totalTokensBoughtByUser + tokenAmount <= maxTokensToPurchasePerWallet,"Max Tokens Per Wallet Reached");
