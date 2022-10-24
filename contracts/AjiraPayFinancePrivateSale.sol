@@ -151,7 +151,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function activatePublicSale() public onlyRole(MANAGER_ROLE){
-        isPrivateSalePhase = false;
+        _activatePublicSale();
         emit OpenPublicSale(msg.sender, block.timestamp);
     }
 
