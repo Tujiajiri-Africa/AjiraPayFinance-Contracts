@@ -212,6 +212,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
     bool public swapAndLiquifyEnabled = true;
     bool public isInTaxHoliday = false;
     bool public isTransferFeeActive = true;
+    bool public isBuyBackEnabled = true;
 
     mapping(address => bool) public _isExcludedFromFee;
     mapping(address => uint256) private _balances;
@@ -334,12 +335,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         buyBackTreasuryPercent = _buyBack;
     }
 
-    function setSwapAndLiquifyEnabled() external onlyRole(MANAGER_ROLE){
-        swapAndLiquifyEnabled = true;
-    }
-
-    function disableSwap() external onlyRole(MANAGER_ROLE){
-        swapAndLiquifyEnabled = false;
+    function setSwapAndLiquifyEnabled(bool _enabled) external onlyRole(MANAGER_ROLE){
+        swapAndLiquifyEnabled = _enabled;
     }
 
     function excludeFromFee(address _beneficiary) public onlyRole(MANAGER_ROLE){
@@ -356,20 +353,16 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         maxTransactionAmount = _amount * 1e18;
     }
 
-    function activateTaxHoliday() public onlyRole(MANAGER_ROLE) {
-        isInTaxHoliday = true;
+    function setTaxHolidayEnabled(bool _enabled) public onlyRole(MANAGER_ROLE){
+        isInTaxHoliday = _enabled;
     }
 
-    function deActivateTaxHoliday() public onlyRole(MANAGER_ROLE) {
-        isInTaxHoliday = false;
+    function setTransferFeeEnabled(bool _enabled) public onlyRole(MANAGER_ROLE){
+        isTransferFeeActive = _enabled;
     }
 
-    function enableTransferFees() public onlyRole(MANAGER_ROLE){
-        isTransferFeeActive = true;
-    }
-
-    function disableTransferFees() public onlyRole(MANAGER_ROLE){
-        isTransferFeeActive = false;
+    function setBuyBackEnabled(bool _enabled) public onlyRole(MANAGER_ROLE){
+        isBuyBackEnabled = _enabled;
     }
 
     function updateMinTokensToLiquify(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
@@ -457,7 +450,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
       if(liquidityTreasuryAmount > 0){
           _addLiquidity(otherHalf, liquidityTreasuryAmount);
       }
-      if(buyBackTreasuryAmount > 0){
+
+      if(isBuyBackEnabled && buyBackTreasuryAmount > 0){
         _buyBackAndBurnTokens(buyBackTreasuryAmount);
       }
       
@@ -499,7 +493,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
             0, // accept any amount of Tokens
             path,
             DEAD, // Burn address
-            block.timestamp
+            block.timestamp + 300
         );    
     }
 
