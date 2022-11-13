@@ -151,7 +151,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function activatePublicSale() public onlyRole(MANAGER_ROLE){
-        _activatePublicSale();
+        isPrivateSalePhase = false;
         emit OpenPublicSale(msg.sender, block.timestamp);
     }
 
@@ -185,7 +185,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
         uint256 totalTokensBoughtByUser = totalTokenContributionsByUser[msg.sender];
         require(totalTokensBoughtByUser + tokenAmount <= maxTokensToPurchasePerWallet,"Max Tokens Per Wallet Reached");
-        require(tokenAmount < maxTokenCapForPresale,"Max Cap Reached");
+        require(tokenAmount <= maxTokenCapForPresale,"Max Cap Reached");
         totalTokenContributionsByUser[msg.sender] = totalTokenContributionsByUser[msg.sender].add(tokenAmount);
         totalBNBInvestmentsByIUser[msg.sender] = totalBNBInvestmentsByIUser[msg.sender].add(weiAmount);
         totalTokensSold = totalTokensSold.add(tokenAmount);
@@ -361,7 +361,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function _checkAndUpdatePresalePhaseByTokensSold() private{
-        if(totalTokensSold >= maxTokenCapForPresale.div(2)){
+        if(totalTokensSold >= maxTokenCapForPresale.div(2) && isPrivateSalePhase){
             _activatePublicSale();
         }
     }
