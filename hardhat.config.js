@@ -44,9 +44,10 @@ module.exports = {
       chainId: 56,
       //gas:600000000000,
       //gasPrice: 600000000000,
-      //gasLimit: 600000000000,
+      gasLimit: 6000000,
+      networkCheckTimeout: 500000000000,
       accounts: [MAINNET_ACCOUNT],
-      allowUnlimitedContractSize: true
+      //allowUnlimitedContractSize: true
       // accounts: {
       //   mnemonic: mnemonic
       // }
