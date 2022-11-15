@@ -265,7 +265,7 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         liquidityTreasuryPercent = 400; //4%
         buyBackTreasuryPercent = 300;//3%
     
-        minLiquidityAmount = 300_000 * 1e18;
+        minLiquidityAmount = 1_000_000 * 1e18;
         maxTransactionAmount = 1_000_000 * 1e18;
 
         _balances[msg.sender] += _totalSupply;
