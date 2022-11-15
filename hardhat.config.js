@@ -3,9 +3,9 @@ require("@nomiclabs/hardhat-waffle");
 require('@nomiclabs/hardhat-ethers');
 
 require('dotenv').config()
-
 const mnemonic = process.env.MNEMONIC;
-const PRIVATE_KEY = process.env.ACCOUNT_PRIVATE_KEY;
+const TESTNET_ACCOUNT = process.env.TESTNET_ACCOUNT;
+const MAINNET_ACCOUNT = process.env.MAINNET_ACCOUNT;
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY
 const AJIRAPAY_TESTNET_ADDRESS = process.env.AJIRAPAY_TESTNET_ADDRESS
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -33,7 +33,7 @@ module.exports = {
       gas:600000000000,
       //gasPrice: 900000000000,
       //gasLimit: 900000000000,
-      accounts: [PRIVATE_KEY],
+      accounts: [TESTNET_ACCOUNT],
       allowUnlimitedContractSize: true
       // accounts: {
       //   mnemonic: mnemonic
@@ -42,10 +42,10 @@ module.exports = {
     bsc: {
       url: "https://bsc-dataseed.binance.org/",
       chainId: 56,
-      gas:600000000000,
+      //gas:600000000000,
       //gasPrice: 600000000000,
       //gasLimit: 600000000000,
-      accounts: [PRIVATE_KEY],
+      accounts: [MAINNET_ACCOUNT],
       allowUnlimitedContractSize: true
       // accounts: {
       //   mnemonic: mnemonic

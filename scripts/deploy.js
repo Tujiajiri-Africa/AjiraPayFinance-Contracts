@@ -10,7 +10,8 @@ async function main() {
   const pancakeswapTestnetRouter = '0xD99D1c33F9fC3444f8101754aBC46c52416550D1';
   const pancakeswapMainnetRouter = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
   const ajiraPayTreasury = '0x69949ac6ec279D1eA6176c55393EaEA43dEf8Dec';
-  const ajiraPayMainnetTreasury = '0x36017AAdeF5a421de9bC6E6E58bF10B3d6b92882'
+  const ajiraPayMainnetTreasury = '0xb00375686741591FeB3541e1740E75FE21CD9f31'
+  const ajiraPayPresaleDurationInDays = 35;
 
   //Airdrop Distributor Contract
   const AjiraPayAirdropDristributor = await hre.ethers.getContractFactory('AjiraPayAirdropDistributor');
@@ -23,19 +24,19 @@ async function main() {
   const maxRewardCap = 1000;
   const tokenDecimals = 18;
 
-  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy(pancakeswapTestnetRouter, ajiraPayTreasury);
+  const ajiraPayFinanceToken = await AjiraPayFinanceToken.deploy(pancakeswapMainnetRouter, ajiraPayMainnetTreasury);
 
   await ajiraPayFinanceToken.deployed();
   
   console.log("Ajira Pay Finance Token deployed to:", ajiraPayFinanceToken.address);
 
-  const ajiraPayPresaleContract = await AjiraPayPresaleContract.deploy(ajiraPayFinanceToken.address, ajiraPayTreasury);
+  const ajiraPayPresaleContract = await AjiraPayPresaleContract.deploy(ajiraPayFinanceToken.address, ajiraPayMainnetTreasury,ajiraPayPresaleDurationInDays);
 
   await ajiraPayPresaleContract.deployed();
 
   console.log("Ajira Pay Finance Presale Contract deployed to:", ajiraPayPresaleContract.address);
 
-  const ajiraPayAirdropDristributor = await AjiraPayAirdropDristributor.deploy(ajiraPayFinanceToken.address,ajiraPayTreasury,minRewarCap,maxRewardCap,tokenDecimals);
+  const ajiraPayAirdropDristributor = await AjiraPayAirdropDristributor.deploy(ajiraPayFinanceToken.address,ajiraPayMainnetTreasury,minRewarCap,maxRewardCap,tokenDecimals);
 
   await ajiraPayAirdropDristributor.deployed();
 

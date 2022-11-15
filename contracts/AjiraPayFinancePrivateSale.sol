@@ -73,6 +73,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event OpenPublicSale(address indexed caller, uint indexed timestamp);
     event UpdatePrivateSalePrice(address indexed caller, uint indexed amount, uint indexed timestamp);
     event UpdatePublisSalePrice(address indexed caller, uint indexed amount, uint indexed timestamp);
+    event UpdatePresaleDuration(address indexed caller, uint indexed durationInDays, uint indexed timestamp);
 
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
@@ -104,13 +105,16 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _;
     }
 
-    constructor(address _token, address payable _treasury){
+    constructor(address _token, address payable _treasury, uint _durationInDays){
         require(_token != address(0),"Invalid Address");
+        require(_durationInDays >= 35,"Presale Runs past 35 days");
         _grantRole(MANAGER_ROLE, _msgSender());
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
         ajiraPayToken = IERC20(_token); 
         treasury = _treasury;
+
+        presaleDurationInSec = block.timestamp + (_durationInDays * 24 * 60 * 60);
 
         uint256 id = _getChainID();
         if(id == 56){
@@ -158,6 +162,12 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     function claimUnsoldTokens() public onlyRole(MANAGER_ROLE) presaleClosed nonReentrant{
         _refundUnsoldTokens(_msgSender());
         emit ClaimUnsoldTokens(_msgSender(), msg.sender, block.timestamp);
+    }
+
+    function setPresaleDurationInDays(uint256 _days) public onlyRole(MANAGER_ROLE){
+        require(_days >= 35,"Presale Runs past 35 days");
+        presaleDurationInSec = block.timestamp + (_days * 24 * 60 * 60);
+        emit UpdatePresaleDuration(msg.sender, _days, block.timestamp);
     }
 
     function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) 
