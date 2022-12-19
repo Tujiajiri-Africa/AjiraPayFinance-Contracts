@@ -9,39 +9,50 @@ import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol';
 
 contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
-    IERC20 public immutable DAI;
-    IERC20 public immutable BUSD;
-    IERC20 public immutable USDT;
-    IERC20 public immutable USDC;
+    using SafeERC20 for IERC20;
+
+    address public immutable DAI;
+    address public immutable BUSD;
+    address public immutable USDT;
+    address public immutable USDC;
     IERC20 public AjiraPayFinanceToken;
 
     AggregatorV3Interface internal busdPriceFeed;
     AggregatorV3Interface internal daiPriceFeed;
     AggregatorV3Interface internal usdtPriceFeed;
     AggregatorV3Interface internal usdcPriceFeed;
+    AggregatorV3Interface internal bnbPriceFeed;
 
     constructor() {
-        DAI = IERC20(0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3);
-        BUSD = IERC20(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56);
-        USDT = IERC20(0x55d398326f99059fF775485246999027B3197955);
-        USDC = IERC20(0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d);
+        DAI = 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3;
+        BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
+        USDT = 0x55d398326f99059fF775485246999027B3197955;
+        USDC = 0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d;
         AjiraPayFinanceToken = IERC20(0xC55b03dC07EC7Bb8B891100E927E982540f0d181);
+
+        
+        busdPriceFeed = AggregatorV3Interface(0xcBb98864Ef56E9042e7d2efef76141f15731B82f);
+        daiPriceFeed = AggregatorV3Interface(0x132d3C0B1D2cEa0BC552588063bdBb210FDeecfA);
+        usdtPriceFeed = AggregatorV3Interface(0xB97Ad0E74fa7d920791E90258A6E2085088b4320);
+        usdcPriceFeed = AggregatorV3Interface(0x51597f405303C4377E36123cBc172b13269EA163);
     }
 
     function stableCoinPurchase(address _stableCoin, uint _amount) public nonReentrant{
-        (address _priceFeedAddress) = _getPriceFeedFromAddress(_stableCoin);
+        //(address _priceFeedAddress) = _getPriceFeedFromAddress(_stableCoin);
         
     }
 
-    function _getPriceFeedFromAddress(address _stableCoin) private returns(address){
-        if(_stableCoin == address(DAI)){
-            return address(DAI);
-        }else if(_stableCoin == address(BUSD)){
-            return address(BUSD);
-        }else if(_stableCoin == address(USDT)){
-            return address(USDT);
-        }else if(_stableCoin == address(USDC)){
-            return address(USDC);
+    function _getPriceFeedFromAddress(address _stableCoin) private view returns(AggregatorV3Interface){
+        if(_stableCoin == DAI){
+            return daiPriceFeed;
+        }else if(_stableCoin == BUSD){
+            return busdPriceFeed;
+        }else if(_stableCoin == USDT){
+            return usdtPriceFeed;
+        }else if(_stableCoin == USDC){
+            return usdcPriceFeed;
+        }else{
+            return bnbPriceFeed;
         }
     }
 
