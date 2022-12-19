@@ -15,7 +15,10 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
     IERC20 public immutable USDC;
     IERC20 public AjiraPayFinanceToken;
 
-    AggregatorV3Interface internal priceFeed;
+    AggregatorV3Interface internal busdPriceFeed;
+    AggregatorV3Interface internal daiPriceFeed;
+    AggregatorV3Interface internal usdtPriceFeed;
+    AggregatorV3Interface internal usdcPriceFeed;
 
     constructor() {
         DAI = IERC20(0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3);
@@ -42,11 +45,27 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
         }
     }
 
-    function _getLatestBNBPriceInUSD() private view returns(uint256, uint256){
-        (, int256 price, , , ) = priceFeed.latestRoundData();
-        uint256 decimals = priceFeed.decimals();
+    function _getLatestBUSDPriceInUSD() private view returns(uint256, uint256){
+        (, int256 price, , , ) = busdPriceFeed.latestRoundData();
+        uint256 decimals = busdPriceFeed.decimals();
         return (uint256(price), decimals);
     }
 
+    function _getLatestUSDTPriceInUSD() private view returns(uint256, uint256){
+        (, int256 price, , , ) = usdtPriceFeed.latestRoundData();
+        uint256 decimals = usdtPriceFeed.decimals();
+        return (uint256(price), decimals);
+    }
 
+    function _getLatestDAIPriceInUSD() private view returns(uint256, uint256){
+        (, int256 price, , , ) = daiPriceFeed.latestRoundData();
+        uint256 decimals = daiPriceFeed.decimals();
+        return (uint256(price), decimals);
+    }
+
+    function _getLatestUSDCPriceInUSD() private view returns(uint256, uint256){
+        (, int256 price, , , ) = usdcPriceFeed.latestRoundData();
+        uint256 decimals = usdcPriceFeed.decimals();
+        return (uint256(price), decimals);
+    }
 }
