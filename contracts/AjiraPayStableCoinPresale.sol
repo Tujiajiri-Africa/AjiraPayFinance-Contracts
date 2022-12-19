@@ -23,6 +23,12 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
     AggregatorV3Interface internal usdcPriceFeed;
     AggregatorV3Interface internal bnbPriceFeed;
 
+    event Contribute(address indexed beneficiary, uint indexed weiAmount, uint indexed tokenAmountBought, uint timestamp);
+    event Claim(address indexed beneficiary, uint indexed tokenAmountReceived, uint indexed timestamp);
+    event UpdateTreasury(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
+    event RecoverBNB(address indexed caller, address indexed destinationWallet, uint indexed amount, uint timestamp);
+    event RecoverERC20Tokens(address indexed caller, address indexed destination, uint amount, uint timestamp);
+
     constructor() {
         DAI = 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3;
         BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
@@ -37,9 +43,9 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
         usdcPriceFeed = AggregatorV3Interface(0x51597f405303C4377E36123cBc172b13269EA163);
     }
 
-    function stableCoinPurchase(address _stableCoin, uint _amount) public nonReentrant{
-        //(address _priceFeedAddress) = _getPriceFeedFromAddress(_stableCoin);
-        
+    function contribute(address _stableCoin, uint _amount) public nonReentrant{
+       (AggregatorV3Interface priceFeed) =  _getPriceFeedFromAddress(_stableCoin);
+       (uint256 price, uint256 decimals) = _getLatestStableCoinPriceInUSD(priceFeed);
     }
 
     function _getPriceFeedFromAddress(address _stableCoin) private view returns(AggregatorV3Interface){
@@ -56,27 +62,9 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
         }
     }
 
-    function _getLatestBUSDPriceInUSD() private view returns(uint256, uint256){
-        (, int256 price, , , ) = busdPriceFeed.latestRoundData();
-        uint256 decimals = busdPriceFeed.decimals();
-        return (uint256(price), decimals);
-    }
-
-    function _getLatestUSDTPriceInUSD() private view returns(uint256, uint256){
-        (, int256 price, , , ) = usdtPriceFeed.latestRoundData();
-        uint256 decimals = usdtPriceFeed.decimals();
-        return (uint256(price), decimals);
-    }
-
-    function _getLatestDAIPriceInUSD() private view returns(uint256, uint256){
-        (, int256 price, , , ) = daiPriceFeed.latestRoundData();
-        uint256 decimals = daiPriceFeed.decimals();
-        return (uint256(price), decimals);
-    }
-
-    function _getLatestUSDCPriceInUSD() private view returns(uint256, uint256){
-        (, int256 price, , , ) = usdcPriceFeed.latestRoundData();
-        uint256 decimals = usdcPriceFeed.decimals();
+    function _getLatestStableCoinPriceInUSD(AggregatorV3Interface _priceFeed) private view returns(uint256, uint256){
+        (, int256 price, , , ) = _priceFeed.latestRoundData();
+        uint256 decimals = _priceFeed.decimals();
         return (uint256(price), decimals);
     }
 }
