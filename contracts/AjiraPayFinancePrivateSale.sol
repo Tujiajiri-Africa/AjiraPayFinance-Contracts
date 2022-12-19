@@ -36,12 +36,23 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalTokensClaimed = 0;
     uint public publicSalePricePerTokenInWei = 30 * 10** 18; //0.3
     uint public privateSalePricePerTokenInWei = 20 * 10 ** 18; //0.2
+    uint public phase1PricePricePerTokenInWei = 10 * 10 ** 18; //0.1 USD
+    uint public phase2PricePricePerTokenInWei = 20 * 10 ** 18; //0.1 USD
+    uint public phase3PricePricePerTokenInWei = 30 * 10 ** 18; //0.1 USD
     uint public maxPossibleInvestmentInWei = 10000 * 10**18;
     uint public totalWeiRaised = 0;
     uint public totalTokensSoldInPublicSale = 0;
     uint public totalTokensSoldInPrivateSale = 0;
     uint public totalWeiRaisedInPublicSale = 0;
     uint public totalWeiRaisedInPrivateSale = 0;
+
+    uint public totalTokensSoldInPhase1 = 0;
+    uint public totalTokensSoldInPhase2 = 0;
+    uint public totalTokensSoldInPhase3 = 0;
+
+    uint public totalWeiRaisedInPhase1 = 0;
+    uint public totalWeiRaisedInPhase2 = 0;
+    uint public totalWeiRaisedInPhase3 = 0;
 
     uint public maxTokenCapForPresale = 15_000_000 * 1e18;
     uint public maxTokensToPurchasePerWallet = 2000_000 * 1e18;
