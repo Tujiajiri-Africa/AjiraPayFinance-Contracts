@@ -11,10 +11,15 @@ import '@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol';
 contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
     using SafeERC20 for IERC20;
 
+    bytes32 public constant MANAGER_ROLE = keccak256('MANAGER_ROLE');
+
     address public immutable DAI;
     address public immutable BUSD;
     address public immutable USDT;
     address public immutable USDC;
+
+    address payable public treasury;
+
     IERC20 public AjiraPayFinanceToken;
 
     AggregatorV3Interface internal busdPriceFeed;
@@ -30,6 +35,7 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
     event RecoverERC20Tokens(address indexed caller, address indexed destination, uint amount, uint timestamp);
 
     constructor() {
+        _grantRole(MANAGER_ROLE, _msgSender());
         DAI = 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3;
         BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
         USDT = 0x55d398326f99059fF775485246999027B3197955;
@@ -47,6 +53,24 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
        (AggregatorV3Interface priceFeed) =  _getPriceFeedFromAddress(_stableCoin);
        (uint256 price, uint256 decimals) = _getLatestStableCoinPriceInUSD(priceFeed);
     }
+
+    function clain() public nonReentrant{
+
+    }
+
+    function UpdateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE){
+
+    }
+
+    function recoverERC20() public onlyRole(MANAGER_ROLE){
+
+    }
+
+    function recoverLostFundsForInvestor() public onlyRole(MANAGER_ROLE){
+        
+    }
+
+    receive() external payable{}
 
     function _getPriceFeedFromAddress(address _stableCoin) private view returns(AggregatorV3Interface){
         if(_stableCoin == DAI){
@@ -67,4 +91,6 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
         uint256 decimals = _priceFeed.decimals();
         return (uint256(price), decimals);
     }
+
+    
 }
