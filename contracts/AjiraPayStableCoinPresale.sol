@@ -36,22 +36,32 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
 
     constructor() {
         _grantRole(MANAGER_ROLE, _msgSender());
+        _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
+
         DAI = 0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3;
         BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
         USDT = 0x55d398326f99059fF775485246999027B3197955;
         USDC = 0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d;
+
         AjiraPayFinanceToken = IERC20(0xC55b03dC07EC7Bb8B891100E927E982540f0d181);
 
         
         busdPriceFeed = AggregatorV3Interface(0xcBb98864Ef56E9042e7d2efef76141f15731B82f);
-        daiPriceFeed = AggregatorV3Interface(0x132d3C0B1D2cEa0BC552588063bdBb210FDeecfA);
+        daiPriceFeed  =  AggregatorV3Interface(0x132d3C0B1D2cEa0BC552588063bdBb210FDeecfA);
         usdtPriceFeed = AggregatorV3Interface(0xB97Ad0E74fa7d920791E90258A6E2085088b4320);
         usdcPriceFeed = AggregatorV3Interface(0x51597f405303C4377E36123cBc172b13269EA163);
     }
 
     function contribute(address _stableCoin, uint _amount) public nonReentrant{
+        require(_stableCoin != address(0),"Invalid Payment Address");
+        require(_stableCoin == DAI || _stableCoin == USDC || _stableCoin == USDT || _stableCoin == BUSD,"Not a Payment method");
+        require(_stableCoin != address(AjiraPayFinanceToken),"Invalid Payment Address");
+        
        (AggregatorV3Interface priceFeed) =  _getPriceFeedFromAddress(_stableCoin);
        (uint256 price, uint256 decimals) = _getLatestStableCoinPriceInUSD(priceFeed);
+       IERC20 paymentCoin = IERC20(_stableCoin);
+       paymentCoin.safeTransferFrom(msg.sender, treasury, _amount);
+       //emit Contribute(msg.sender, weiAmount, tokenAmountBought, timestamp);
     }
 
     function clain() public nonReentrant{
@@ -67,7 +77,7 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
     }
 
     function recoverLostFundsForInvestor() public onlyRole(MANAGER_ROLE){
-        
+
     }
 
     receive() external payable{}
