@@ -10,6 +10,7 @@ import '@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol';
 
 contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
     using SafeERC20 for IERC20;
+    using SafeMath for uint256;
 
     bytes32 public constant MANAGER_ROLE = keccak256('MANAGER_ROLE');
 
@@ -21,6 +22,11 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
     address payable public treasury;
 
     IERC20 public AjiraPayFinanceToken;
+
+    uint public phase1PricePricePerTokenInWei = 10 * 10 ** 18; //0.1 USD
+    uint public phase2PricePricePerTokenInWei = 20 * 10 ** 18; //0.2 USD
+    uint public phase3PricePricePerTokenInWei = 30 * 10 ** 18; //0.3 USD
+
 
     AggregatorV3Interface internal busdPriceFeed;
     AggregatorV3Interface internal daiPriceFeed;
@@ -59,16 +65,20 @@ contract AjiraPayStableCoinPresale is Ownable, AccessControl,ReentrancyGuard{
         
        (AggregatorV3Interface priceFeed) =  _getPriceFeedFromAddress(_stableCoin);
        (uint256 price, uint256 decimals) = _getLatestStableCoinPriceInUSD(priceFeed);
-       IERC20 paymentCoin = IERC20(_stableCoin);
-       paymentCoin.safeTransferFrom(msg.sender, treasury, _amount);
+        uint256 weiAmount = _amount;
+        uint256 usdAmountFromValue = weiAmount.mul(price).div(10 ** decimals);
+        require(weiAmount > 0, "No Amount Specified");
+        IERC20 paymentCoin = IERC20(_stableCoin);
+        uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
+        require(paymentCoin.transferFrom(msg.sender, treasury, _amount),"Failed to send stable coin");
        //emit Contribute(msg.sender, weiAmount, tokenAmountBought, timestamp);
     }
 
-    function clain() public nonReentrant{
+    function claim() public nonReentrant{
 
     }
 
-    function UpdateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE){
+    function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE){
 
     }
 
