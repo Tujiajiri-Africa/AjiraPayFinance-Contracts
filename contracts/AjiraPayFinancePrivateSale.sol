@@ -207,7 +207,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
         if(isPhase1Active){
             require(usdAmountFromValue >= phase1PricePerTokenInWei,"Contribution Below Phase #1 Minimum");
-        }else if(isPhase1Active){
+        }else if(isPhase2Active){
             require(usdAmountFromValue >= phase2PricePerTokenInWei,"Contribution Below Phase #2 Minimum");
         }else{
             require(usdAmountFromValue >= phase3PricePerTokenInWei,"Contribution Below Phase #3 Minimum");
@@ -372,15 +372,20 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function _updatePresalePhaseParams(uint256 _tokenAmount, uint256 _weiAmount) private{
-        if(isPrivateSalePhase){
+        if(isPhase1Active){
             unchecked{
-                totalTokensSoldInPrivateSale = totalTokensSoldInPrivateSale.add(_tokenAmount);
-                totalWeiRaisedInPrivateSale = totalWeiRaisedInPrivateSale.add(_weiAmount);
+                totalTokensSoldInPhase1 = totalTokensSoldInPhase1.add(_tokenAmount);
+                totalWeiRaisedInPhase1 = totalWeiRaisedInPhase1.add(_weiAmount);
+            }
+        }else if(isPhase2Active){
+            unchecked{
+                totalTokensSoldInPhase2 = totalTokensSoldInPhase2.add(_tokenAmount);
+                totalWeiRaisedInPhase2 = totalWeiRaisedInPhase2.add(_weiAmount);
             }
         }else{
-            unchecked{
-                totalTokensSoldInPublicSale = totalTokensSoldInPublicSale.add(_tokenAmount);
-                totalWeiRaisedInPublicSale = totalWeiRaisedInPublicSale.add(_weiAmount);
+             unchecked{
+                totalTokensSoldInPhase3 = totalTokensSoldInPhase3.add(_tokenAmount);
+                totalWeiRaisedInPhase3 = totalWeiRaisedInPhase3.add(_weiAmount);
             }
         }
     }
@@ -393,10 +398,12 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function _getTokenPriceByPhase() private view returns(uint256){
         uint256 _tokenPriceInWeiBySalePhase;
-         if(isPrivateSalePhase){
-            _tokenPriceInWeiBySalePhase = privateSalePricePerTokenInWei;
+        if(isPhase1Actives){
+            _tokenPriceInWeiBySalePhase = phase1PricePerTokenInWei;
+        }else if(isPhase2Active){
+            _tokenPriceInWeiBySalePhase = phase2PricePerTokenInWei;
         }else{
-            _tokenPriceInWeiBySalePhase = publicSalePricePerTokenInWei;
+            _tokenPriceInWeiBySalePhase = phase3PricePerTokenInWei;
         }
         return _tokenPriceInWeiBySalePhase;
     }
