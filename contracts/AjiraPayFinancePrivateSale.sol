@@ -27,6 +27,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     bool public isPresaleOpen = false;
     bool public isPresalePaused = false;
     bool public isOpenForClaims = false;
+    
+    bool public isPhase1Active = true;
+    bool public isPhase2Active = false;
+    bool public isPhase3Active = false;
 
     bool public isPrivateSalePhase = true;
     
@@ -36,9 +40,9 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalTokensClaimed = 0;
     uint public publicSalePricePerTokenInWei = 30 * 10** 18; //0.3
     uint public privateSalePricePerTokenInWei = 20 * 10 ** 18; //0.2
-    uint public phase1PricePricePerTokenInWei = 10 * 10 ** 18; //0.1 USD
-    uint public phase2PricePricePerTokenInWei = 20 * 10 ** 18; //0.1 USD
-    uint public phase3PricePricePerTokenInWei = 30 * 10 ** 18; //0.1 USD
+    uint public phase1PricePerTokenInWei = 10 * 10 ** 18; //0.1 USD
+    uint public phase2PricePerTokenInWei = 20 * 10 ** 18; //0.2 USD
+    uint public phase3PricePerTokenInWei = 30 * 10 ** 18; //0.3 USD
     uint public maxPossibleInvestmentInWei = 10000 * 10**18;
     uint public totalWeiRaised = 0;
     uint public totalTokensSoldInPublicSale = 0;
@@ -189,7 +193,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         treasury = _newTreasury;
         emit UpdateTreasury(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
-
+    //phase1PricePricePerTokenInWei
+    //uint public phase1PricePricePerTokenInWei = 10 * 10 ** 18; //0.1 USD
+    //uint public phase2PricePricePerTokenInWei = 20 * 10 ** 18; //0.2 USD
+    //uint public phase3PricePricePerTokenInWei = 30 * 10 ** 18; //0.3 USD
     function contribute() public payable nonReentrant presaleOpen presaleUnpaused{
         _checkInvestorCoolDownBeforeNextPurchase(msg.sender);
         uint256 pricePerToken = _getTokenPriceByPhase();
@@ -197,11 +204,19 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         uint256 weiAmount = msg.value;
         uint256 usdAmountFromValue = weiAmount.mul(price).div(10 ** decimals);
         require(weiAmount > 0, "No Amount Specified");
-        if(isPrivateSalePhase){
-            require(usdAmountFromValue >= privateSalePricePerTokenInWei,"Contribution Below Minimum");
+
+        if(isPhase1Active){
+            require(usdAmountFromValue >= phase1PricePerTokenInWei,"Contribution Below Phase #1 Minimum");
+        }else if(isPhase1Active){
+            require(usdAmountFromValue >= phase2PricePerTokenInWei,"Contribution Below Phase #2 Minimum");
         }else{
-            require(usdAmountFromValue >= publicSalePricePerTokenInWei,"Contribution Below Minimum");
+            require(usdAmountFromValue >= phase3PricePerTokenInWei,"Contribution Below Phase #3 Minimum");
         }
+        // if(isPrivateSalePhase){
+        //     require(usdAmountFromValue >= privateSalePricePerTokenInWei,"Contribution Below Minimum");
+        // }else{
+        //     require(usdAmountFromValue >= publicSalePricePerTokenInWei,"Contribution Below Minimum");
+        // }
         require(usdAmountFromValue <= maxPossibleInvestmentInWei,"Contribution Above Maximum");
         uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
         uint256 totalTokensBoughtByUser = totalTokenContributionsByUser[msg.sender];
@@ -324,6 +339,24 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function _activatePublicSale() private{
         isPrivateSalePhase = false;
+    }
+
+    function _activatePhase1() private{
+        isPhase1Active = true;
+        isPhase2Active = false;
+        isPhase3Active = false;
+    }
+
+    function _activatePhase2() private{
+        isPhase2Active = true;
+        isPhase1Active = false;
+        isPhase3Active = false;
+    }
+
+    function _activatePhase3() private{
+        isPhase3Active = true;
+        isPhase1Active = false;
+        isPhase2Active = false;
     }
 
     function _updateInvestorCountAndStatus() private{
