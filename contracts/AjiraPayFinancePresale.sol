@@ -4,12 +4,10 @@ import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import '@openzeppelin/contracts/access/AccessControl.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
-import '@openzeppelin/contracts/utils/math/SafeMath.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol';
 
-contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
-    using SafeMath for uint256;
+contract AjiraPayFinancePresale is Ownable, AccessControl, ReentrancyGuard{
     using SafeERC20 for IERC20;
 
     bytes32 constant public MANAGER_ROLE = keccak256('MANAGER_ROLE');
@@ -31,25 +29,20 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     bool public isPhase1Active = true;
     bool public isPhase2Active = false;
     bool public isPhase3Active = false;
-
-    bool public isPrivateSalePhase = true;
     
-    uint public totalInvestors = 0;
     uint public presaleDurationInSec;
+
+    uint public totalInvestors = 0;
+    uint public totalWeiRaised = 0;
     uint public totalTokensSold = 0;
     uint public totalTokensClaimed = 0;
-    uint public publicSalePricePerTokenInWei = 30 * 10** 18; //0.3
-    uint public privateSalePricePerTokenInWei = 20 * 10 ** 18; //0.2
+
     uint public phase1PricePerTokenInWei = 10 * 10 ** 18; //0.1 USD
     uint public phase2PricePerTokenInWei = 20 * 10 ** 18; //0.2 USD
     uint public phase3PricePerTokenInWei = 30 * 10 ** 18; //0.3 USD
-    uint public maxPossibleInvestmentInWei = 10000 * 10**18;
-    uint public totalWeiRaised = 0;
-    uint public totalTokensSoldInPublicSale = 0;
-    uint public totalTokensSoldInPrivateSale = 0;
-    uint public totalWeiRaisedInPublicSale = 0;
-    uint public totalWeiRaisedInPrivateSale = 0;
 
+    uint public maxPossibleInvestmentInWei = 10000 * 10**18;
+    
     uint public totalTokensSoldInPhase1 = 0;
     uint public totalTokensSoldInPhase2 = 0;
     uint public totalTokensSoldInPhase3 = 0;
@@ -89,7 +82,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event UnpausePresale(address indexed caller, uint indexed timestamp);
     event Contribute(address indexed beneficiary, uint indexed weiAmount, uint indexed tokenAmountBought, uint timestamp);
     event Claim(address indexed beneficiary, uint indexed tokenAmountReceived, uint indexed timestamp);
-    event UpdateTreasury(address indexed caller, address indexed prevTreasury, address indexed newTreasury, uint timestamp);
     event RecoverBNB(address indexed caller, address indexed destinationWallet, uint indexed amount, uint timestamp);
     event RecoverERC20Tokens(address indexed caller, address indexed destination, uint amount, uint timestamp);
     event UpdateMaxCap(address indexed caller, uint prevCap, uint newCap, uint timestamp);
@@ -99,7 +91,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     event OpenPublicSale(address indexed caller, uint indexed timestamp);
     event UpdatePrivateSalePrice(address indexed caller, uint indexed amount, uint indexed timestamp);
     event UpdatePublisSalePrice(address indexed caller, uint indexed amount, uint indexed timestamp);
-    event UpdatePresaleDuration(address indexed caller, uint indexed durationInDays, uint indexed timestamp);
 
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
@@ -139,25 +130,8 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
         ajiraPayToken = IERC20(_token); 
         treasury = _treasury;
-
+        priceFeed = AggregatorV3Interface(CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS);
         presaleDurationInSec = block.timestamp + (_durationInDays * 24 * 60 * 60);
-
-        uint256 id = _getChainID();
-        if(id == 56){
-            priceFeed = AggregatorV3Interface(CHAINLINK_MAINNET_BNB_USD_PRICEFEED_ADDRESS);
-        }else if(id == 97){
-            priceFeed = AggregatorV3Interface(CHAINLINK_TESTNET_BNB_USD_PRICEFEED_ADDRESS);
-        }
-    }
-
-    function startPresale() public onlyRole(MANAGER_ROLE) presaleClosed{
-        _setPresaleOpened();
-        emit StartPresale(_msgSender(), block.timestamp);
-    }
-
-    function closePresale() public onlyRole(MANAGER_ROLE) presaleOpen{
-        _setPresaleClosed();
-        emit ClosePresale(_msgSender(), block.timestamp);
     }
 
     function pausePresale() public onlyRole(MANAGER_ROLE) presaleUnpaused{
@@ -180,9 +154,8 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit CloseTokenClaims(_msgSender(), block.timestamp);
     }
 
-    function activatePublicSale() public onlyRole(MANAGER_ROLE){
-        isPrivateSalePhase = false;
-        emit OpenPublicSale(msg.sender, block.timestamp);
+    function setPresaleProgressStatus(bool _status) external onlyRole(MANAGER_ROLE){
+        isPresaleOpen = _status;
     }
 
     function activatePhase1() external onlyRole(MANAGER_ROLE){
@@ -205,27 +178,21 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     function setPresaleDurationInDays(uint256 _days) public onlyRole(MANAGER_ROLE){
         require(_days >= 35,"Presale Runs past 35 days");
         presaleDurationInSec = block.timestamp + (_days * 24 * 60 * 60);
-        emit UpdatePresaleDuration(msg.sender, _days, block.timestamp);
     }
 
     function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE) 
     nonZeroAddress(_newTreasury) 
     presalePaused
     {
-        address payable prevTreasury = treasury;
         treasury = _newTreasury;
-        emit UpdateTreasury(_msgSender(), prevTreasury, _newTreasury, block.timestamp);
     }
-    //phase1PricePricePerTokenInWei
-    //uint public phase1PricePricePerTokenInWei = 10 * 10 ** 18; //0.1 USD
-    //uint public phase2PricePricePerTokenInWei = 20 * 10 ** 18; //0.2 USD
-    //uint public phase3PricePricePerTokenInWei = 30 * 10 ** 18; //0.3 USD
+
     function contribute() public payable nonReentrant presaleOpen presaleUnpaused{
         _checkInvestorCoolDownBeforeNextPurchase(msg.sender);
         uint256 pricePerToken = _getTokenPriceByPhase();
         (uint256 price, uint256 decimals) = _getLatestBNBPriceInUSD();
         uint256 weiAmount = msg.value;
-        uint256 usdAmountFromValue = weiAmount.mul(price).div(10 ** decimals);
+        uint256 usdAmountFromValue = weiAmount * price / (10 ** decimals);
         require(weiAmount > 0, "No Amount Specified");
 
         if(isPhase1Active){
@@ -235,20 +202,16 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         }else{
             require(usdAmountFromValue >= phase3PricePerTokenInWei,"Contribution Below Phase #3 Minimum");
         }
-        // if(isPrivateSalePhase){
-        //     require(usdAmountFromValue >= privateSalePricePerTokenInWei,"Contribution Below Minimum");
-        // }else{
-        //     require(usdAmountFromValue >= publicSalePricePerTokenInWei,"Contribution Below Minimum");
-        // }
+
         require(usdAmountFromValue <= maxPossibleInvestmentInWei,"Contribution Above Maximum");
-        uint256 tokenAmount = usdAmountFromValue.mul(100).mul(10**18).div(pricePerToken);
+        uint256 tokenAmount = usdAmountFromValue * 100 * (10 ** 18) / pricePerToken;
         uint256 totalTokensBoughtByUser = totalTokenContributionsByUser[msg.sender];
         require(totalTokensBoughtByUser + tokenAmount <= maxTokensToPurchasePerWallet,"Max Tokens Per Wallet Reached");
         require(tokenAmount <= maxTokenCapForPresale,"Max Cap Reached");
-        totalTokenContributionsByUser[msg.sender] = totalTokenContributionsByUser[msg.sender].add(tokenAmount);
-        totalBNBInvestmentsByIUser[msg.sender] = totalBNBInvestmentsByIUser[msg.sender].add(weiAmount);
-        totalTokensSold = totalTokensSold.add(tokenAmount);
-        totalWeiRaised = totalWeiRaised.add(weiAmount);
+        totalTokenContributionsByUser[msg.sender] += tokenAmount;
+        totalBNBInvestmentsByIUser[msg.sender] += weiAmount;
+        totalTokensSold += tokenAmount;
+        totalWeiRaised += weiAmount;
         _updateInvestorCountAndStatus();
         _forwardFunds();
         _updatePresalePhaseParams(tokenAmount, weiAmount);
@@ -321,12 +284,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit UpdatePublisSalePrice(msg.sender, _amount, block.timestamp);
     }
 
-    function setPrivateSalePriceInWei(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
-        require(_amount >= 30 && _amount <= 31,"Invalid Price: Between 0.3$ - 0.4$");
-        privateSalePricePerTokenInWei = _amount * 10 ** 18;
-        emit UpdatePrivateSalePrice(msg.sender, _amount, block.timestamp);
-    }
-
     receive() external payable{
         contribute();
     }
@@ -344,7 +301,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function _refundUnsoldTokens(address _destination) private{
         uint256 availableTokenBalance = getContractTokenBalance();
-        uint256 refundableBalance = availableTokenBalance.sub(totalTokensSold);
+        uint256 refundableBalance = availableTokenBalance - totalTokensSold;
         require(refundableBalance > 0,"Insufficient Token Balance");
         require(refundableBalance <= availableTokenBalance,"Excess Token Withdrawals");
         require(ajiraPayToken.transfer(_destination, refundableBalance),"Failed To Refund Tokens");
@@ -373,10 +330,6 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         isPresaleOpen = false;
     }
 
-    function _activatePublicSale() private{
-        isPrivateSalePhase = false;
-    }
-
     function _activatePhase1() private{
         isPhase1Active = true;
         isPhase2Active = false;
@@ -397,12 +350,12 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function _updateInvestorCountAndStatus() private{
         if(isActiveInvestor[msg.sender] == false){
-            totalInvestors = totalInvestors.add(1);
+            totalInvestors += 1;
             investors.push(msg.sender);
             isActiveInvestor[msg.sender] = true;
         }
         canClaimTokens[msg.sender] = true;
-        nextPossiblePurchaseTimeByUser[msg.sender] = block.timestamp.add(120); //2mins
+        nextPossiblePurchaseTimeByUser[msg.sender] = block.timestamp + 120;
         lastUserBuyTimeInSec[msg.sender] = block.timestamp;
         
     }
@@ -410,18 +363,18 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     function _updatePresalePhaseParams(uint256 _tokenAmount, uint256 _weiAmount) private{
         if(isPhase1Active){
             unchecked{
-                totalTokensSoldInPhase1 = totalTokensSoldInPhase1.add(_tokenAmount);
-                totalWeiRaisedInPhase1 = totalWeiRaisedInPhase1.add(_weiAmount);
+                totalTokensSoldInPhase1 += _tokenAmount;
+                totalWeiRaisedInPhase1 += _weiAmount;
             }
         }else if(isPhase2Active){
             unchecked{
-                totalTokensSoldInPhase2 = totalTokensSoldInPhase2.add(_tokenAmount);
-                totalWeiRaisedInPhase2 = totalWeiRaisedInPhase2.add(_weiAmount);
+                totalTokensSoldInPhase2 += _tokenAmount;
+                totalWeiRaisedInPhase2 += _weiAmount;
             }
         }else{
              unchecked{
-                totalTokensSoldInPhase3 = totalTokensSoldInPhase3.add(_tokenAmount);
-                totalWeiRaisedInPhase3 = totalWeiRaisedInPhase3.add(_weiAmount);
+                totalTokensSoldInPhase3 += _tokenAmount;
+                totalWeiRaisedInPhase3 += _weiAmount;
             }
         }
     }
@@ -453,42 +406,34 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     function _updateInvestorContributionByPresalePhase(address _account, uint256 _weiAmount, uint256 _tokenAmount) private{
         if(isPhase1Active){
             unchecked {
-                totalPersonalTokenInvestmentPhase1[_account] = totalPersonalTokenInvestmentPhase1[_account].add(_tokenAmount);
-                totalPersonalWeiInvestmentPhase1[_account] = totalPersonalWeiInvestmentPhase1[_account].add(_weiAmount);
+                totalPersonalTokenInvestmentPhase1[_account] += _tokenAmount; 
+                totalPersonalWeiInvestmentPhase1[_account] += _weiAmount;
             }
         }else if(isPhase2Active){
             unchecked {
-                totalPersonalTokenInvestmentPhase2[_account] = totalPersonalTokenInvestmentPhase2[_account].add(_tokenAmount);
-                totalPersonalWeiInvestmentPhase2[_account] = totalPersonalWeiInvestmentPhase2[_account].add(_weiAmount);
+                totalPersonalTokenInvestmentPhase2[_account] += _tokenAmount; 
+                totalPersonalWeiInvestmentPhase2[_account] += _weiAmount; 
             }
         }else{
             unchecked {
-                totalPersonalTokenInvestmentPhase3[_account] = totalPersonalTokenInvestmentPhase3[_account].add(_tokenAmount);
-                totalPersonalWeiInvestmentPhase3[_account] = totalPersonalWeiInvestmentPhase3[_account].add(_weiAmount);
+                totalPersonalTokenInvestmentPhase3[_account] += _tokenAmount;
+                totalPersonalWeiInvestmentPhase3[_account] += _weiAmount;
             }
         }
     }
 
     function _updateInvestorContribution(uint256 _tokenAmount) private{
         unchecked{
-            totalTokenContributionsClaimedByUser[msg.sender] = totalTokenContributionsClaimedByUser[msg.sender].add(_tokenAmount);
-            totalTokensClaimed = totalTokensClaimed.add(_tokenAmount);
+            totalTokenContributionsClaimedByUser[msg.sender] += _tokenAmount;
+            totalTokensClaimed += _tokenAmount;
         }
     }
 
     function _checkAndUpdatePresalePhaseByTokensSold() private{
         if(totalTokensSold >= phase1TotalTokensToSell && isPhase1Active){
             _activatePhase2();
-        }if(totalTokensSold >= phase1TotalTokensToSell.add(phase2TotalTokensToSell) && isPhase2Active){
+        }if(totalTokensSold >= (phase1TotalTokensToSell + phase2TotalTokensToSell) && isPhase2Active){
             _activatePhase3();
         }
-    }
-
-    function _getChainID() private view returns (uint256) {
-        uint256 id;
-        assembly {
-            id := chainid()
-        }
-        return id;
     }
 }
