@@ -132,24 +132,12 @@ contract AjiraPayFinancePresale is Ownable, AccessControl, ReentrancyGuard{
         presaleDurationInSec = block.timestamp + (_durationInDays * 24 * 60 * 60);
     }
 
-    function pausePresale() public onlyRole(MANAGER_ROLE) presaleUnpaused{
-        isPresalePaused = true;
-        emit PausePresale(_msgSender(), block.timestamp);
+    function setPresalePauseStatus(bool _status) external onlyRole(MANAGER_ROLE){
+        isPresalePaused = _status;
     }
 
-    function unPausePresale() public onlyRole(MANAGER_ROLE) presalePaused{
-        isPresalePaused = false;
-        emit UnpausePresale(_msgSender(), block.timestamp);
-    }
-
-    function activateTokenClaims() public onlyRole(MANAGER_ROLE){
-        _setClaimStarted();
-        emit OpenTokenClaims(_msgSender(), block.timestamp);
-    }
-
-    function deActivateTokenClaims() public onlyRole(MANAGER_ROLE){
-        _setClaimsClosed();
-        emit CloseTokenClaims(_msgSender(), block.timestamp);
+    function setPresaleClaimsStatus(bool _status) external onlyRole(MANAGER_ROLE){
+        isOpenForClaims = _status;
     }
 
     function setPresaleProgressStatus(bool _status) external onlyRole(MANAGER_ROLE){
@@ -183,6 +171,15 @@ contract AjiraPayFinancePresale is Ownable, AccessControl, ReentrancyGuard{
     presalePaused
     {
         treasury = _newTreasury;
+    }
+
+    function updatePresalePhaseAmount(uint256 _phase1Amount, uint256 _phase2Amount, uint256 _phase3Amount) external onlyRole(MANAGER_ROLE) nonReentrant{
+        require(_phase1Amount > 0,"Invalid Token Amount");
+        require(_phase2Amount > 0,"Invalid Token Amount");
+        require(_phase3Amount > 0,"Invalid Token Amount");
+        phase1TotalTokensToSell = _phase1Amount * 1e18;
+        phase2TotalTokensToSell = _phase2Amount * 1e18;
+        phase3TotalTokensToSell = _phase3Amount * 1e18;
     }
 
     function contribute() public payable nonReentrant presaleOpen presaleUnpaused{
