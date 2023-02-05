@@ -58,9 +58,12 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalWeiRaisedInPhase2 = 0;
     uint public totalWeiRaisedInPhase3 = 0;
 
+    uint256 public phase1TotalTokensToSell = 3_500_000 * 1e18;
+    uint256 public phase2TotalTokensToSell = 2_000_000 * 1e18;
+    uint256 public phase3TotalTokensToSell = 5_000_000 * 1e18;
+
     uint public maxTokenCapForPresale = 15_000_000 * 1e18;
-    uint public maxTokensToPurchasePerWallet = 2000_000 * 1e18;
-    uint public minTokensToPurchasePerWallet;
+    uint public maxTokensToPurchasePerWallet = 2_000_000 * 1e18;
 
     mapping(address => uint) public totalTokenContributionsByUser;
     mapping(address => uint) public totalTokenContributionsClaimedByUser;
@@ -174,6 +177,18 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         emit OpenPublicSale(msg.sender, block.timestamp);
     }
 
+    function activatePhase1() external onlyRole(MANAGER_ROLE){
+        _activatePhase1();
+    }
+    
+    function activatePhase2() external onlyRole(MANAGER_ROLE){
+        _activatePhase2();
+    }
+
+    function activatePhase3() external onlyRole(MANAGER_ROLE){
+        _activatePhase3();
+    }
+
     function claimUnsoldTokens() public onlyRole(MANAGER_ROLE) presaleClosed nonReentrant{
         _refundUnsoldTokens(_msgSender());
         emit ClaimUnsoldTokens(_msgSender(), msg.sender, block.timestamp);
@@ -272,21 +287,33 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function updateMaxTokenCapForPresale(uint256 _amount) public onlyRole(MANAGER_ROLE){
-        require(_amount > 15_000_000,"Max Cap Must be above 15% of total supply");
+        require(_amount >= 15_000_000,"Max Cap Must be above 15% of total supply");
         uint256 prevMaxCap = maxTokenCapForPresale;
         uint256 newMaxCap = _amount * 1e18;
         maxTokenCapForPresale = newMaxCap;
         emit UpdateMaxCap(msg.sender, prevMaxCap, newMaxCap, block.timestamp);
     }
 
-    function setPublicSalePriceInWei(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
-        require(_amount > 20 && _amount < 30,"Invalid Price: Between 0.2$ - 0.3$");
-        publicSalePricePerTokenInWei = _amount * 10 ** 18;
+    function setPhase1PriceInWei(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
+        require(_amount >= 10 && _amount <= 20,"Invalid Price: Between 0.2$ - 0.3$");
+        phase1PricePerTokenInWei = _amount * 10 ** 18;
+        emit UpdatePublisSalePrice(msg.sender, _amount, block.timestamp);
+    }
+
+    function setPhase2PriceInWei(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
+        require(_amount >= 20 && _amount <= 30,"Invalid Price: Between 0.2$ - 0.3$");
+        phase2PricePerTokenInWei = _amount * 10 ** 18;
+        emit UpdatePublisSalePrice(msg.sender, _amount, block.timestamp);
+    }
+
+    function setPhase3PriceInWei(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
+        require(_amount >= 30 && _amount <= 31,"Invalid Price: Between 0.2$ - 0.3$");
+        phase3PricePerTokenInWei = _amount * 10 ** 18;
         emit UpdatePublisSalePrice(msg.sender, _amount, block.timestamp);
     }
 
     function setPrivateSalePriceInWei(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
-        require(_amount > 30 && _amount < 40,"Invalid Price: Between 0.3$ - 0.4$");
+        require(_amount >= 30 && _amount <= 31,"Invalid Price: Between 0.3$ - 0.4$");
         privateSalePricePerTokenInWei = _amount * 10 ** 18;
         emit UpdatePrivateSalePrice(msg.sender, _amount, block.timestamp);
     }
@@ -398,7 +425,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
 
     function _getTokenPriceByPhase() private view returns(uint256){
         uint256 _tokenPriceInWeiBySalePhase;
-        if(isPhase1Actives){
+        if(isPhase1Active){
             _tokenPriceInWeiBySalePhase = phase1PricePerTokenInWei;
         }else if(isPhase2Active){
             _tokenPriceInWeiBySalePhase = phase2PricePerTokenInWei;
@@ -422,8 +449,10 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     }
 
     function _checkAndUpdatePresalePhaseByTokensSold() private{
-        if(totalTokensSold >= maxTokenCapForPresale.div(2) && isPrivateSalePhase){
-            _activatePublicSale();
+        if(totalTokensSold >= phase1TotalTokensToSell && isPhase1Active){
+            _activatePhase2();
+        }if(totalTokensSold >= phase1TotalTokensToSell.add(phase2TotalTokensToSell) && isPhase2Active){
+            _activatePhase3();
         }
     }
 
