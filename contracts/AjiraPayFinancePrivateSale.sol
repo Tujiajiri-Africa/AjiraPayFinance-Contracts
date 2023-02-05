@@ -71,6 +71,14 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
     mapping(address => bool) public canClaimTokens;
     mapping(address => bool) public isActiveInvestor;
 
+    mapping(address => uint256) public totalPersonalTokenInvestmentPhase1;
+    mapping(address => uint256) public totalPersonalTokenInvestmentPhase2;
+    mapping(address => uint256) public totalPersonalTokenInvestmentPhase3;
+
+    mapping(address => uint256) public totalPersonalWeiInvestmentPhase1;
+    mapping(address => uint256) public totalPersonalWeiInvestmentPhase2;
+    mapping(address => uint256) public totalPersonalWeiInvestmentPhase3;
+
     mapping(address => uint) public nextPossiblePurchaseTimeByUser;
 
     mapping(address => uint) public lastUserBuyTimeInSec;
@@ -245,6 +253,7 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
         _forwardFunds();
         _updatePresalePhaseParams(tokenAmount, weiAmount);
         _checkAndUpdatePresalePhaseByTokensSold();
+        _updateInvestorContributionByPresalePhase(msg.sender,weiAmount,tokenAmount );
         _checkPresaleEndStatus();
         emit Contribute(msg.sender, weiAmount, tokenAmount, block.timestamp);
     }
@@ -440,7 +449,26 @@ contract AjiraPayFinancePrivateSale is Ownable, AccessControl, ReentrancyGuard{
             require(canClaimTokens[msg.sender] == true,"Already Claimed Contribution");
         }
     }
-    
+
+    function _updateInvestorContributionByPresalePhase(address _account, uint256 _weiAmount, uint256 _tokenAmount) private{
+        if(isPhase1Active){
+            unchecked {
+                totalPersonalTokenInvestmentPhase1[_account] = totalPersonalTokenInvestmentPhase1[_account].add(_tokenAmount);
+                totalPersonalWeiInvestmentPhase1[_account] = totalPersonalWeiInvestmentPhase1[_account].add(_weiAmount);
+            }
+        }else if(isPhase2Active){
+            unchecked {
+                totalPersonalTokenInvestmentPhase2[_account] = totalPersonalTokenInvestmentPhase2[_account].add(_tokenAmount);
+                totalPersonalWeiInvestmentPhase2[_account] = totalPersonalWeiInvestmentPhase2[_account].add(_weiAmount);
+            }
+        }else{
+            unchecked {
+                totalPersonalTokenInvestmentPhase3[_account] = totalPersonalTokenInvestmentPhase3[_account].add(_tokenAmount);
+                totalPersonalWeiInvestmentPhase3[_account] = totalPersonalWeiInvestmentPhase3[_account].add(_weiAmount);
+            }
+        }
+    }
+
     function _updateInvestorContribution(uint256 _tokenAmount) private{
         unchecked{
             totalTokenContributionsClaimedByUser[msg.sender] = totalTokenContributionsClaimedByUser[msg.sender].add(_tokenAmount);
