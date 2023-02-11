@@ -4,6 +4,9 @@
 // You can also run a script with `npx hardhat run <script>`. If you do that, Hardhat
 // will compile your contracts, add the Hardhat Runtime Environment's members to the
 // global scope, and execute the script.
+//AJP Stablecoinpresale(V1) contract https://bscscan.com/address/0x9A858D24d58dD7B2ACcC0409C5A2De8eA81182DE
+//AJP Stablecoinpresale(V2) contract: https://bscscan.com/address/0x80F81420DF8b9d7DFBa925a954aC6304A1c69A36#code
+//AJP StabecoinLatest(V3) contract https://bscscan.com/address/0x1dd6f0610B42f09048913B525B112d6984452E5C#code
 const hre = require("hardhat");
 
 async function main() {
@@ -17,9 +20,11 @@ async function main() {
   //Airdrop Distributor Contract
   const AjiraPayAirdropDristributor = await hre.ethers.getContractFactory('AjiraPayAirdropDistributor');
   //Presale Contract
-  const AjiraPayPresaleContract = await hre.ethers.getContractFactory('AjiraPayFinancePrivateSale');
+  const AjiraPayPresaleContract = await hre.ethers.getContractFactory('AjiraPayFinancePreSale');
   //Ajira Pay Finace Token Contract
   const AjiraPayFinanceToken = await hre.ethers.getContractFactory('AjiraPayFinanceToken');
+  //Ajira Pay Finance Stable Coin Presale Contract 
+  const AjiraPayFinanceStablecoinPresale = await hre.ethers.getContractFactory('AjiraPayFinanceStablecoinPresale');
 
   const minRewarCap = 1;
   const maxRewardCap = 1000;
@@ -42,6 +47,13 @@ async function main() {
   await ajiraPayAirdropDristributor.deployed();
 
   console.log("Ajira Pay Airdrop Distributor deployed to:", ajiraPayAirdropDristributor.address);
+
+  const ajiraPayStablecoinPresale = await AjiraPayFinanceStablecoinPresale.deploy(ajiraPayFinalMainnetAddress,ajiraPayMainnetTreasury);
+
+  await ajiraPayStablecoinPresale.deployed();
+
+  console.log("Ajira Pay Finance StableCoin presale contract deployed to:", ajiraPayStablecoinPresale.address);
+
 }
 
 // We recommend this pattern to be able to use async/await everywhere
