@@ -35,9 +35,10 @@ contract AjiraPayFinancePresale is Ownable, AccessControl, ReentrancyGuard{
     uint public totalTokensSold = 0;
     uint public totalTokensClaimed = 0;
 
-    uint public phase1PricePerTokenInWei = 10 * 10 ** 18; //0.1 USD
-    uint public phase2PricePerTokenInWei = 20 * 10 ** 18; //0.2 USD
-    uint public phase3PricePerTokenInWei = 30 * 10 ** 18; //0.3 USD
+    uint256 public minimumContribution = 10 * 10 ** 18; // 10 USD
+    uint public phase1PricePerTokenInWei = 6 * 10 ** 18; //0.06 USD
+    uint public phase2PricePerTokenInWei = 7 * 10 ** 18; //0.07 USD
+    uint public phase3PricePerTokenInWei = 8 * 10 ** 18; //0.08 USD
 
     uint public maxPossibleInvestmentInWei = 10000 * 10**18;
     
@@ -89,7 +90,8 @@ contract AjiraPayFinancePresale is Ownable, AccessControl, ReentrancyGuard{
     event OpenPublicSale(address indexed caller, uint indexed timestamp);
     event UpdatePrivateSalePrice(address indexed caller, uint indexed amount, uint indexed timestamp);
     event UpdatePublisSalePrice(address indexed caller, uint indexed amount, uint indexed timestamp);
-
+    event UpdatePresaleToken(address indexed caller, address indexed presaleToken, uint256 indexed timestamp);
+    
     modifier presaleOpen(){
         require(isPresaleOpen == true,"Sale Closed");
         _;
@@ -277,6 +279,12 @@ contract AjiraPayFinancePresale is Ownable, AccessControl, ReentrancyGuard{
         require(_amount >= 30 && _amount <= 31,"Invalid Price: Between 0.2$ - 0.3$");
         phase3PricePerTokenInWei = _amount * 10 ** 18;
         emit UpdatePublisSalePrice(msg.sender, _amount, block.timestamp);
+    }
+
+    function updatePresaleToken(address _token) public onlyRole(MANAGER_ROLE){
+        require(_token != address(0),"Zero Address Detected");
+        ajiraPayFinanceToken = IERC20(_token);
+        emit UpdatePresaleToken(msg.sender, _token, block.timestamp);
     }
 
     receive() external payable{

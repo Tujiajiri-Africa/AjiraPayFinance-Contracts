@@ -3,8 +3,8 @@ pragma solidity =0.8.4;
 import '@openzeppelin/contracts/access/Ownable.sol';
 import 'erc-payable-token/contracts/token/ERC1363/ERC1363.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import '@openzeppelin/contracts/access/AccessControl.sol';
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
+import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol';
 
 interface IPancakeswapV2Factory {
     event PairCreated(address indexed token0, address indexed token1, address pair, uint);
@@ -196,42 +196,142 @@ interface IPancakeRouter02 is IPancakeRouter01 {
     ) external;
 }
 
-contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{ 
+contract AjiraPayFinanceTokenV2 is Ownable, ERC1363,ReentrancyGuard, ERC20Burnable{ 
+    using SafeERC20 for IERC20;
     uint256 private _totalSupply = 200_000_000 * 1e18;
     string private _name = 'Ajira Pay Finance';
     string private _symbol = 'AJP';
 
-    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
-
     IPancakeRouter02 public pancakeswapV2Router;
     address public pancakeswapV2Pair;
     address payable public treasury;
-    address private immutable DEAD = 0x000000000000000000000000000000000000dEaD;
+    address payable public autoLiquidityReceiver;
+    address private constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     bool inSwapAndLiquify;
-    bool public swapAndLiquifyEnabled = true;
+    bool public swapAndLiquifyEnabled = false;
     bool public isInTaxHoliday = false;
-    bool public isTransferFeeActive = true;
     bool public isBuyBackEnabled = true;
+    bool public isAutoLiquidityEnabled = true;
 
-    mapping(address => bool) public _isExcludedFromFee;
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
+    mapping(address => bool) public isExcludedFromFee;
 
     uint256 public buyFee;
     uint256 public sellFee;
-    uint256 public txFee;
-    uint256 public liquidityFee;
     uint256 public minLiquidityAmount; 
-    uint256 public maxTransactionAmount;
-    uint256 private liquidityTreasuryPercent;
-    uint256 private buyBackTreasuryPercent;
-    uint256 private devTreasuryPercent;
+    uint256 public liquidityTreasuryPercent;
+    uint256 public buyBackTreasuryPercent;
+    uint256 public devTreasuryPercent;
     
-    event SwapAndLiquify(uint256 tokensSwapped,uint256 ethReceived,uint256 tokensIntoLiqudity);
-    event Burn(address indexed from, address indexed to, uint indexed amount, uint timestamp);
+    event SwapAndLiquify(
+        uint256 tokensSwapped,
+        uint256 ethReceived,
+        uint256 tokensIntoLiqudity
+    );
+
+    event SetTreasuryPercentages(
+        address indexed caller, 
+        uint256 indexed buyBackTreasuryPercent, 
+        uint256 indexed liquityTreasuryPercent, 
+        uint256 timestamp
+    );
     
-    modifier lockTheSwap {
+    event UpdatePancakeswapPair(
+        address indexed caller,
+        address indexed newPair,
+        uint256 indexed timestamp
+    );
+
+    event ExcludeFromFees(
+        address indexed account,
+        address indexed caller,
+        uint256 indexed timestamp
+    );
+
+    event IncludeInFees(
+        address indexed account,
+        address indexed caller,
+        uint256 indexed timestamp
+    );
+    
+    event SetAutoLiquidityEnabled(
+        address indexed caller,
+        bool indexed autoLiquidityStatus,
+        uint256 indexed timestamp
+    );
+
+    event UpdateFees(
+        address indexed caller,
+        uint256 indexed buyFeePercent,
+        uint256 indexed sellFeePercent,
+        uint256 timestamp
+    );
+
+    event UpdateRouter(
+        address indexed caller,
+        address indexed newRouter,
+        uint256 indexed timestamp
+    );
+
+    event UpdateTreasury(
+        address indexed caller,
+        address payable indexed newTreasury,
+        uint256 indexed timestamp
+    );
+
+    event UpdateMinLiquidityAmount(
+        address indexed caller,
+        uint256 indexed minTokensToLiquify,
+        uint256 indexed timestamp
+    );
+
+    event SetBuyBackEnabled(
+        address indexed caller,
+        bool indexed isBuyBackEnabled,
+        uint256 indexed timestamp
+    );
+    
+    event RecoverLostTokens(
+        address indexed caller,
+        address indexed destination,
+        address indexed token,
+        uint256 tokenAmount,
+        uint256 timestamp
+    );
+
+    event SetSwapEnabled(
+        address indexed caller, 
+        bool indexed isSwapEnabled,
+        uint256 indexed timestamp
+    );
+    
+    event UpdateTaxHolidatStatus(
+        address indexed caller,
+        bool indexed isFeeHolidayEnabled,
+        uint256 indexed timestamp
+
+    );
+
+    event UpdateLiquidityReceiver(
+        address indexed caller,
+        address payable indexed liquidityReceiver,
+        uint256 indexed timestamp
+    );
+
+    event AddLiquidity(
+        uint256 indexed tokenAmount, 
+        uint256 indexed bnbAmount
+    );
+
+    event BuyBackAndBurn(
+        uint256 indexed bnbAmountBurned
+    );
+
+    event TakeTax(
+        uint256 tokenAmount
+    );
+
+    modifier swapping{
         inSwapAndLiquify = true;
         _;
         inSwapAndLiquify = false;
@@ -241,10 +341,8 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         require(_router != address(0),"Invalid Address");
         require(_treasury != address(0),"Invalid Address");
 
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(MANAGER_ROLE, msg.sender);
-
         treasury = _treasury;
+        autoLiquidityReceiver = payable(msg.sender);
 
         IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(_router);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(
@@ -253,149 +351,126 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
 
         pancakeswapV2Router = _pancakeSwapV2Router;
 
-        _isExcludedFromFee[msg.sender] = true;
-        _isExcludedFromFee[address(this)] = true;
-        _isExcludedFromFee[treasury] = true;
+        isExcludedFromFee[msg.sender] = true;
+        isExcludedFromFee[address(this)] = true;
+        isExcludedFromFee[DEAD] = true;
+        isExcludedFromFee[treasury] = true;
 
-        buyFee = 200; //2%
-        sellFee = 500;//5%
-        txFee = 200;//2%
-        liquidityFee = 100;//1%
+        //Percentages 100 = 1% ;1000 = 10%; 10000 = 100%
+        buyFee = 100;//1%
+        sellFee = 200;//2%
 
-        liquidityTreasuryPercent = 400; //4%
-        buyBackTreasuryPercent = 300;//3%
+        liquidityTreasuryPercent = 1000;//10%
+        buyBackTreasuryPercent = 4000; //40%
+        devTreasuryPercent = 5000;//50%
     
         minLiquidityAmount = 1_000_000 * 1e18;
-        maxTransactionAmount = 1_000_000 * 1e18;
-
-        _balances[msg.sender] += _totalSupply;
-        emit Transfer(address(0), msg.sender, _totalSupply);
+        _mint(msg.sender, _totalSupply);
     }
 
-    function balanceOf(address account) public view virtual override(ERC20) returns (uint256) {
-        return _balances[account];
-    }
-
-    function totalSupply() public view virtual override(ERC20) returns (uint256) {
-        return _totalSupply;
-    }
-
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1363, AccessControl) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1363) returns (bool) {
         return 
             interfaceId == type(IERC1363).interfaceId ||
             interfaceId == type(IERC165).interfaceId ||
             interfaceId == type(IERC20Metadata).interfaceId ||
             interfaceId == type(IERC20).interfaceId ||
-            interfaceId == type(IAccessControl).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 
-    function recoverBNB(uint _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
-        uint256 currentBalance = address(this).balance;
-        require(currentBalance >= _amount,"Insufficient Balance");
-        treasury.transfer(_amount);
-    }
-
-    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyRole(MANAGER_ROLE){
+    function recoverLostTokensForInvestor(address _token, uint _amount) public onlyOwner nonReentrant{
         require(_token != address(this), "Invalid Token Address");
-        IERC20(_token).transfer(msg.sender, _amount);
+        IERC20(_token).safeTransfer(msg.sender, _amount);
+        emit RecoverLostTokens(msg.sender, msg.sender, _token, _amount, block.timestamp);
     }
     
-    function updateTreasury(address payable _newTreasury) public onlyRole(MANAGER_ROLE){
+    function updateTreasury(address payable _newTreasury) public onlyOwner{
         require(_newTreasury != address(0),"Invalid Address");
         treasury = _newTreasury;
-        _isExcludedFromFee[treasury] = true;
+        isExcludedFromFee[treasury] = true;
+        emit UpdateTreasury(msg.sender, _newTreasury, block.timestamp);
     }
 
-    function updateRouterAddress(address _newRouter) external onlyRole(MANAGER_ROLE) {
+    function updateRouterAddress(address _newRouter) external onlyOwner {
         require(_newRouter != address(0),"Invalid Router Address");
         IPancakeRouter02 _pancakeSwapV2Router = IPancakeRouter02(_newRouter);
         pancakeswapV2Pair = IPancakeswapV2Factory(_pancakeSwapV2Router.factory()).createPair(
             address(this), 
             _pancakeSwapV2Router.WETH()); 
         pancakeswapV2Router = _pancakeSwapV2Router;
+        emit UpdateRouter(msg.sender, _newRouter, block.timestamp);
     }
 
-    function setDeductionFeePercentages(uint256 _txFee, uint256 _liquidityFee, uint256 _buyFee, uint256 _sellFee) 
-    public 
-    onlyRole(MANAGER_ROLE)
-    {
-        uint256 feeTotals = _txFee + _liquidityFee + _buyFee + _sellFee;
+    function setDeductionFeePercentages(uint256 _buyFee, uint256 _sellFee) public onlyOwner nonReentrant{
+        uint256 feeTotals = _buyFee + _sellFee;
         require(feeTotals <= 1000,"Fees Cannot Exceed 10%");
-        txFee = _txFee;
-        liquidityFee = _liquidityFee;
         buyFee = _buyFee;
         sellFee = _sellFee;
+        emit UpdateFees(msg.sender, _buyFee, _sellFee, block.timestamp);
     }
 
-    function setTreasuryPercentages(uint256 _liquidity, uint256 _buyBack) public onlyRole(MANAGER_ROLE){
-        uint256 totalTreasuryAmount = _liquidity + _buyBack;
-        require(totalTreasuryAmount <= 10000,"Total Cannot exceed 100%");
+    function setTreasuryPercentages(uint256 _liquidity, uint256 _buyBack, uint256 _dev) public onlyOwner nonReentrant{
+        uint256 totalTreasuryAmount = _liquidity + _buyBack + _dev;
+        require(totalTreasuryAmount <= 10000,"Total Treasury cannot exceed 100%");
         liquidityTreasuryPercent = _liquidity;
         buyBackTreasuryPercent = _buyBack;
+        devTreasuryPercent = _dev;
+        emit SetTreasuryPercentages(msg.sender, _buyBack, _liquidity, block.timestamp);
     }
 
-    function setSwapAndLiquifyEnabled(bool _enabled) external onlyRole(MANAGER_ROLE){
+    function setSwapAndLiquifyEnabled(bool _enabled) public onlyOwner{
         swapAndLiquifyEnabled = _enabled;
+        emit SetSwapEnabled(msg.sender, _enabled, block.timestamp);
     }
 
-    function excludeFromFee(address _beneficiary) public onlyRole(MANAGER_ROLE){
-        _isExcludedFromFee[_beneficiary] = true;
+    function excludeFromFee(address _account) public onlyOwner{
+        isExcludedFromFee[_account] = true;
+        emit ExcludeFromFees(_account, msg.sender, block.timestamp);
     }
 
-    function includeInFee(address _beneficiary) public onlyRole(MANAGER_ROLE){
-        _isExcludedFromFee[_beneficiary] = false;
+    function includeInFee(address _account) public onlyOwner{
+        isExcludedFromFee[_account] = false;
+        emit IncludeInFees(_account, msg.sender, block.timestamp);
     }
 
-    function setMaxTransactionAmount(uint _amount) external onlyRole(MANAGER_ROLE){
-        require(_amount > 0,"Zero Amt");
-        require(_amount < (_totalSupply /100));
-        maxTransactionAmount = _amount * 1e18;
-    }
-
-    function setTaxHolidayEnabled(bool _enabled) public onlyRole(MANAGER_ROLE){
+    function setTaxHolidayEnabled(bool _enabled) public onlyOwner{
         isInTaxHoliday = _enabled;
+        emit UpdateTaxHolidatStatus(msg.sender, _enabled, block.timestamp);
     }
 
-    function setTransferFeeEnabled(bool _enabled) public onlyRole(MANAGER_ROLE){
-        isTransferFeeActive = _enabled;
-    }
-
-    function setBuyBackEnabled(bool _enabled) public onlyRole(MANAGER_ROLE){
+    function setBuyBackEnabled(bool _enabled) public onlyOwner{
         isBuyBackEnabled = _enabled;
+        emit SetBuyBackEnabled(msg.sender, _enabled, block.timestamp);
     }
 
-    function updateMinTokensToLiquify(uint256 _amount) public onlyRole(MANAGER_ROLE) nonReentrant{
+    function updateMinTokensToLiquify(uint256 _amount) public onlyOwner nonReentrant{
         require(_amount > 0, "Invalid Liquidity Amount");
         minLiquidityAmount = _amount * 1e18;
+        emit UpdateMinLiquidityAmount(msg.sender, _amount, block.timestamp);
     }
 
-    function burn(address _account, uint _amount) public onlyRole(MANAGER_ROLE){
-        require(_account != address(0), "Invalid Address");
-        uint256 accountBalance = _balances[_account];
-        require(accountBalance >= _amount, "Insufficient Balance");
-        unchecked{
-            _balances[_account] = accountBalance - _amount;
-        }
-        _totalSupply -= _amount;
-        emit Burn(_account, address(0), _amount, block.timestamp);
+    function updateAutoLiquidityStatus(bool _liquidityStatus) external onlyOwner{
+        isAutoLiquidityEnabled = _liquidityStatus;
+        emit SetAutoLiquidityEnabled(msg.sender, _liquidityStatus, block.timestamp);
+    }
+
+    function updatePancakeswapPair(address _newPair) external onlyOwner{
+        require(_newPair != address(0),"Invalid Pair Address");
+        require(_newPair != pancakeswapV2Pair,"Pair Already Exists");
+        pancakeswapV2Pair = _newPair;
+        emit UpdatePancakeswapPair(msg.sender, _newPair, block.timestamp);
+    }
+
+    function setAutoLiquidityReceiver(address payable _receiver) external onlyOwner{
+        autoLiquidityReceiver = _receiver;
+        emit UpdateLiquidityReceiver(msg.sender, _receiver, block.timestamp);
     }
 
     receive() external payable {}
 
-    
-    function _transfer(address _sender, address _recipient, uint _amount) internal virtual override(ERC20) {
+    function _transfer(address _sender, address _recipient, uint _amount) internal virtual override {
         require(_amount > 0, "Amount Cannot Be Zero");
         require(_sender != address(0), "Invalid Address");
         require(_recipient != address(0), "Invalid Address");
-
-        if(_sender != owner() && _recipient != owner()) {
-            require(_amount <= maxTransactionAmount, "Amount Exceeds Max Tx");
-        }
-
-        uint256 senderBalance = _balances[_sender];
- 
-        require(senderBalance >= _amount, "Insufficient Balance");
 
         uint256 contractTokenBalance = balanceOf(address(this));
 
@@ -412,24 +487,17 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
             }
 
             bool takeFee = true;
-            _isExcludedFromFee[_sender] == true ? takeFee = false : takeFee = true;
-            isInTaxHoliday == true ? takeFee = false: takeFee = true;
-
-            _transferStandard(_sender,_recipient,_amount,takeFee); 
+            if(isExcludedFromFee[_sender] || isExcludedFromFee[_recipient]){
+                takeFee = false;
+            } 
+            if(isInTaxHoliday){
+                takeFee = false;
+            }
+            uint256 amountReceived = (takeFee) ? _takeTaxes(_sender, _recipient, _amount) : _amount;
+            super._transfer(_sender, _recipient, amountReceived);
     }
 
-    function _transferStandard(address _sender, address _recipient, uint256 _amount, bool _shouldTakeFee) private{
-        _balances[_sender] -= _amount;
-        uint256 amountReceived = (_shouldTakeFee) ? _takeTaxes(_sender, _recipient, _amount) : _amount;
-        _balances[_recipient] += amountReceived;
-
-        (, ,uint256 liquidityFeeAmount) = _getFeeAmountValues(_amount);
-        _takeLiquidity(liquidityFeeAmount);
-
-        emit Transfer(_sender, _recipient, amountReceived);
-    }
-
-    function _swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
+    function _swapAndLiquify(uint256 contractTokenBalance) internal swapping{
       uint256 half = contractTokenBalance / 2;
       uint256 otherHalf = contractTokenBalance - half;
       uint256 initialBalance = address(this).balance;
@@ -438,27 +506,24 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
 
       uint256 newBalance = address(this).balance - initialBalance;
 
-      uint256 halfBalance = newBalance / 2;
-      payable(treasury).transfer(halfBalance);
+      (uint256 liquidityTreasuryAmount, uint256 buyBackTreasuryAmount, uint256 devTreasuryAmount) = _calculateTreasuryAmountFromBNB(newBalance);
       
-      uint256 leftOverBnb = newBalance - halfBalance;
-      
-      uint256 totalTreasury = buyBackTreasuryPercent + liquidityTreasuryPercent;
-      uint256 buyBackTreasuryAmount = leftOverBnb / totalTreasury * buyBackTreasuryPercent;
-      uint256 liquidityTreasuryAmount = leftOverBnb / totalTreasury * liquidityTreasuryPercent;
-      
-      if(liquidityTreasuryAmount > 0){
-          _addLiquidity(otherHalf, liquidityTreasuryAmount);
+      if(devTreasuryAmount > 0){
+        payable(treasury).transfer(devTreasuryAmount);
+      }
+
+      if(isAutoLiquidityEnabled && liquidityTreasuryAmount > 0){
+          _addLiquidity(address(this), otherHalf, liquidityTreasuryAmount);
       }
 
       if(isBuyBackEnabled && buyBackTreasuryAmount > 0){
         _buyBackAndBurnTokens(buyBackTreasuryAmount);
       }
       
-      emit SwapAndLiquify(half, halfBalance, otherHalf);
+      emit SwapAndLiquify(half, liquidityTreasuryAmount, otherHalf);
     }
 
-    function _swapTokensForBnb(uint256 _tokenAmount) private {
+    function _swapTokensForBnb(uint256 _tokenAmount) internal{
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = pancakeswapV2Router.WETH();
@@ -472,48 +537,31 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
         );
     }
 
-    function _addLiquidity(uint256 _tokenAmount, uint256 _bnbAmount) private{
-        _approve(address(this), address(pancakeswapV2Router), _tokenAmount);
+    function _addLiquidity(address _token, uint256 _tokenAmount, uint256 _bnbAmount) internal{
+        IERC20(_token).approve(address(pancakeswapV2Router), _tokenAmount);
         pancakeswapV2Router.addLiquidityETH{value: _bnbAmount}(
             address(this),
             _tokenAmount,
             0, // slippage is unavoidable
             0, // slippage is unavoidable
-            owner(),
+            autoLiquidityReceiver,
             block.timestamp
         );
+        emit AddLiquidity(_tokenAmount, _bnbAmount);
     }
 
-    function _buyBackAndBurnTokens(uint256 _bnbAmount) private{
+    function _buyBackAndBurnTokens(uint256 _bnbAmount) internal{
         address[] memory path = new address[](2);
-        path[0] = address(this);
-        path[1] = pancakeswapV2Router.WETH();
+        path[0] = pancakeswapV2Router.WETH();
+        path[1] = address(this);
         _approve(address(this), address(pancakeswapV2Router), _bnbAmount);
          pancakeswapV2Router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: _bnbAmount}(
             0, // accept any amount of Tokens
             path,
-            DEAD, // Burn address
-            block.timestamp + 300
+            DEAD,
+            block.timestamp
         );    
-    }
-
-    function _calculateLiquidityFee(uint256 _amount) private view returns (uint256) {
-        return _amount * liquidityFee / 10000;
-    }
-
-    function _calculateTaxFee(uint256 _amount) private view returns (uint256) {
-        return _amount * txFee / 10000;
-    }
-
-    function _getFeeAmountValues(uint256 _tAmount) private view returns (uint256, uint256, uint256) {
-      uint256 tFee = _calculateTaxFee(_tAmount);
-      uint256 tLiquidity = _calculateLiquidityFee(_tAmount);
-      uint256 tTransferAmount = _tAmount - tFee - tLiquidity;
-      return (tTransferAmount, tFee, tLiquidity);
-    }
-
-    function _takeLiquidity(uint256 _liquidityFeeAmount) private{
-        _balances[address(this)] += _liquidityFeeAmount;
+        emit BuyBackAndBurn(_bnbAmount);
     }
 
     function _takeTaxes(address from, address to, uint256 amount) private returns (uint256) {
@@ -522,16 +570,22 @@ contract AjiraPayFinanceToken is Ownable, ERC1363,AccessControl,ReentrancyGuard{
             currentFee = buyFee;
         } else if (to == pancakeswapV2Pair) {
             currentFee = sellFee;
-        } else {
-            if(isTransferFeeActive){
-                currentFee = txFee;
-            }else{
-                currentFee = 0;
-            }
-        }
-
+        }else{
+            currentFee = 0;
+        } 
+        
         uint256 feeAmount = amount * currentFee / 10000;
-        _balances[address(this)] += feeAmount;
+        if(feeAmount > 0){
+            super._transfer(from, address(this), feeAmount);
+            emit TakeTax(feeAmount);
+        }
         return amount - feeAmount;
+    }
+
+    function _calculateTreasuryAmountFromBNB(uint256 _amount) private view returns(uint256, uint256, uint256){
+        uint256 liquidity = _amount * liquidityTreasuryPercent / 10000;
+        uint256 buyBack = _amount * buyBackTreasuryPercent / 10000;
+        uint256 dev = _amount * devTreasuryPercent / 10000;
+        return (liquidity, buyBack, dev);
     }
 }
