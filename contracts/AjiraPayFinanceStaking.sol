@@ -231,6 +231,7 @@ contract AjiraPayFinanceStaking is Ownable, AccessControl, Pausable, ReentrancyG
         _withdraw(msg.sender,totalTokenAmountInWei);
         isStakeWithdrawn[msg.sender][_stakeItem.id] = true;
         totalStakedTokens = totalStakedTokens.sub(totalAccumulatedReward);
+        totalStakedByHolder[msg.sender] = totalStakedByHolder[msg.sender].sub(amount);
         totalStakeClaimed = totalStakeClaimed.add(totalAccumulatedReward);
         totalStakingRewardsDistributed = totalStakingRewardsDistributed.add(totalRewards);
         emit WithdrawSingleStake(msg.sender, amount, totalAccumulatedReward, block.timestamp);
@@ -259,6 +260,7 @@ contract AjiraPayFinanceStaking is Ownable, AccessControl, Pausable, ReentrancyG
         _withdraw(msg.sender,totalsInWei);
         isStakeWithdrawn[msg.sender][_stakeItem.id] = true;
         totalStakedTokens = totalStakedTokens.sub(totals);
+        totalStakedByHolder[msg.sender] = totalStakedByHolder[msg.sender].sub(_stakeItem.stakingAmount);
         totalStakeClaimed = totalStakeClaimed.add(totals);
         totalStakingRewardsDistributed = totalStakingRewardsDistributed.add(totalRewards);
         emit EmmergencyWithdraw(msg.sender, totals, block.timestamp);
